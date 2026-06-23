@@ -1,0 +1,8 @@
+TODO1 : OK :  les ancres pour elargir les chapitres doivent être uniquement cliquable hors de la seekbar (en cliquant sur la fleche en haut ou en bas selon que c'est le debut ou la fin), sinon on ne peut pas seeker jusqu'au bout du chapitre sans activer les ancres.
+TODO2 : OK : en plus du titre du chapitre, afficher la durée dans la barre de thumbnail en bas : et la mettre à jour si elle est modifiée par les ancres.
+TODO3 : ajoute un bouton pour ajouter un chapitre à la position sur la seekbar, d'une durée de 30s par défaut. si possible, popup pour demander durée, et titre chapitre. 
+TODO4 : ajouter la possilité, en doublecliquand sur un chapitre (barre du bas), de changer textuellement le titre du chapitre, le timestamp et sa durée. 
+
+
+
+

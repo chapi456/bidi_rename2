@@ -1,0 +1,15 @@
+FT1 : presque bon, voir chat :  la hauteur de la bande du bas (avec les thumbnails) n'est pas assez grande. il faut fixer une taille suffisante pour tous les éléments ajoutés (sans doute que la scroll bar qui s'affiche est responsable d'une partie du manque de taille) : ne pas faire apparaitre de scroll bar, normalement il y a assez de place. c'est le thumbnail du milieu qui doit être la variable d'ajustement. en complément, peut-être piste de solution : au démarrage, le thubnail central prend la taille de la fenetre moins les éléments autours : barre à droite, barre à gauche et barre thumbnail en bas (avec leurs textes, ...), ne pas agrandir la fenetre car ça génére des scrollbar et les zones se réduisent.
+FT2 : OK :  pour les positions de crop, quand pas définie, c'est pas la position par défaut pour les chapitres >1. pour ceux là, la position quand non défini, c'est celle du chapitre précédent. s'il est défini, alors c'est cette position qui est héritée, pas celle par défaut ou du premier. et quand un non défini est défini, les héritiers successifs sont modifiés aussi (en mode hérité). et si un chapitre défini, le suivant hérite => modifié, si celui d'après est défini et celui qui suit hérité, il hérite du précédent , pas de premier défini. clair. en gros, l'héritage est 'position du précédent' tout le temps. qu'il soit défini ou hérité.
+FT3 : OK :  je n'ai toujours que 1 seul fichier (et après rafraichissement avec le bouton) dans la liste déroulante quand je ne définis par de fichier en ligne de commande.
+FT4 : OK : H ou BAR_H non défini dans _hit_edge : 
+"
+File "C:\TEMP\ComfyUI_portable_torch_2.9.1_cu130_cp313_sageattention_triton\ComfyUI_windows_portable\python_embeded\Lib\tkinter\__init__.py", line 2074, in __call__
+    return self.func(*args)
+           ~~~~~~~~~^^^^^^^
+  File "C:\TEMP\_dev\bidi_rename\video_processor\cropdefine.py", line 408, in _on_hover
+    hit = self._hit_edge(e.x, e.y, W)
+  File "C:\TEMP\_dev\bidi_rename\video_processor\cropdefine.py", line 399, in _hit_edge
+    if abs(mx - xe) <= self.HANDLE_ZONE and my >= bar_y + BAR_H:
+                                                          ^^^^^
+NameError: name 'BAR_H' is not defined. Did you mean: 'self.BAR_H'?
+"

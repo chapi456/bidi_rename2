@@ -1,0 +1,77 @@
+# FILE: .gitignore
+# TARGET: ./
+# MODIFIED: 2026-01-29
+# VERSION: 0.1.0
+# DESCRIPTION: Exclusions Git
+
+# Configuration utilisateur
+config/config.yaml
+
+# Fichiers système
+last_id.txt
+encoders_available.txt
+logs/*.log
+
+# Répertoires de sortie
+_videos
+
+# Répertoires de sortie
+_done/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.tmp*
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Tests
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Vidéos de test générées
+tests/fixtures/videos/*.mp4
+tests/fixtures/videos/*.mkv
+tests/fixtures/videos/*.avi
+
+*.BACKUP
+*-old*
+*_old*
+
+

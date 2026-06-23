@@ -1,0 +1,143 @@
+# FILE: config.template.yaml
+# TARGET: config/
+# MODIFIED: 2026-01-29
+# VERSION: 0.1.0
+# DESCRIPTION: Template de configuration - Copier vers config.yaml et adapter
+
+# ============================================================================
+# STYLES SUPPORTÉS (OBLIGATOIRE)
+# ============================================================================
+# Liste des styles à valider lors du parsing
+# Le parsing REJETTERA tout fichier avec un style non listé ici
+#
+# ⚠️ IMPORTANT: Compléter cette liste avec VOS styles réels
+styles:
+  - styleA
+  - styleB
+  - styleC
+  # Ajouter tous vos styles ici
+  # Exemples (à adapter):
+  # - BlowJob
+  # - Cowgirl
+  # - Doggystyle
+  # - Missionary
+  # - POV (si c'est un style et pas juste un flag)
+
+
+# ============================================================================
+# RÉPERTOIRES À TRAITER
+# ============================================================================
+# Liste des répertoires contenant des vidéos à traiter
+# Chaque répertoire peut avoir son propre fichier #toCut.txt
+#
+# - Chemins relatifs : relatifs au script
+# - Chemins absolus : utilisés tels quels
+# - Le répertoire courant "." est traité par défaut
+directories:
+  - "."                           # Répertoire courant (où se trouve le script)
+  # Exemples Windows:
+  # - "D:/Videos/ToProcess"
+  # - "E:/Backup/Videos"
+  # Exemples Linux:
+  # - "/mnt/nas/videos"
+  # - "~/Videos/ToProcess"
+
+
+# ============================================================================
+# PARAMÈTRES DE TRAITEMENT
+# ============================================================================
+processing:
+  # Déplacer fichiers traités vers sous-répertoire _done/
+  move_to_done: false
+  
+  # Mode développement : conserve fichiers partiels en cas d'erreur
+  dev_mode: false
+
+
+# ============================================================================
+# EXTENSIONS VIDÉO SUPPORTÉES
+# ============================================================================
+# Les fichiers avec ces extensions seront traités
+# Case insensitive (.MP4 = .mp4)
+video_extensions:
+  - .mp4
+  - .mkv
+  - .avi
+  - .mov
+  - .mpg
+  - .wmv
+
+
+# ============================================================================
+# FICHIERS SYSTÈME
+# ============================================================================
+# Noms des fichiers utilisés par le système
+system_files:
+  # Fichier contenant le dernier ID utilisé (auto-incrémenté)
+  # Initialisé à 1000 si absent
+  last_id_file: "last_id.txt"
+  
+  # Cache des encodeurs disponibles (détectés au premier lancement)
+  encoders_cache: "encoders_available.txt"
+  
+  # Fichier de découpe (un par répertoire traité)
+  # ⚠️ IMPORTANT: Nom exact, sensible à la casse
+  tocut_file: "#toCut.txt"
+  
+  # Fichier de logs
+  log_file: "logs/video_processor.log"
+
+
+# ============================================================================
+# OPTIONS D'ENCODAGE (Phase 2)
+# ============================================================================
+# Configuration pour l'encodage vidéo
+# Non utilisé en Phase 1 MVP
+encoding:
+  # Codec par défaut si non spécifié
+  default_codec: "h264"
+  prefer_h265: true
+  # Preset ffmpeg (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
+  preset: "medium"
+  
+  # CRF (Constant Rate Factor) : 0-51, 23 = défaut, plus bas = meilleure qualité
+  crf: 23
+
+
+# ============================================================================
+# RÉSOLUTIONS SUPPORTÉES (Phase 2)
+# ============================================================================
+# Mapping pour l'option RESIZE(resolution)
+resolutions:
+  "4K": "3840x2160"
+  "1080": "1920x1080"
+  "720": "1280x720"
+  "480": "854x480"
+
+# ============================================================================
+# MKV / METADATA (mkvmerge)
+# ============================================================================
+mkv:
+  chapter_language: eng
+  keep_old_files: false
+  always_remux: true
+
+  # Thumbnails de chapitres (attachments mkvmerge)
+  generate_chapter_thumbnails: false
+  keep_chapter_thumbnails: false
+
+  # Génère les previews "-mask.jpg" (crop overlay) pour cover + chapitres
+  generate_chapter_mask_previews: false
+
+# ============================================================================
+# ENCODING
+# ============================================================================
+encoding:
+  # Codec par défaut si ENCODE(...) absent dans le nom
+  default_codec: "h264"
+
+  # Si true et si un encodeur H.265 est dispo (ex: hevc_nvenc), alors utiliser h265 par défaut
+  prefer_hevc_when_available: false
+
+output:
+  move_to_done: false  # Déplacer fichiers traités vers _done/
