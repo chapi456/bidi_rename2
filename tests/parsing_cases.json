@@ -1,0 +1,435 @@
+[
+  {
+    "_comment": "=== CAS VALIDES ==="
+  },
+  {
+    "id": "minimal",
+    "desc": "Titre + style uniquement",
+    "input": "Mon Film - styleA.mp4",
+    "styles": ["styleA", "styleB"],
+    "expect": {
+      "valid": true,
+      "title": "Mon Film",
+      "styles": ["styleA"],
+      "studio": null,
+      "actors": [],
+      "star": false,
+      "date": null,
+      "booleans": {"POV": false, "3D": false, "NOCUT": false},
+      "crop": null,
+      "chapters_count": 0,
+      "encode": null,
+      "resize": null,
+      "file_id": null,
+      "extension": ".mp4"
+    }
+  },
+  {
+    "id": "studio",
+    "desc": "Avec studio entre crochets",
+    "input": "[Acme Studios] - Mon Film - styleA.mkv",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "studio": "Acme Studios",
+      "title": "Mon Film",
+      "styles": ["styleA"],
+      "extension": ".mkv"
+    }
+  },
+  {
+    "id": "actors",
+    "desc": "Avec acteurs @...@",
+    "input": "Mon Film - @Alice, Bob@ - styleA.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "actors": ["Alice", "Bob"],
+      "title": "Mon Film",
+      "styles": ["styleA"]
+    }
+  },
+  {
+    "id": "star",
+    "desc": "Style avec # (star)",
+    "input": "Mon Film - styleA#.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "styles": ["styleA"],
+      "star": true
+    }
+  },
+  {
+    "id": "multi_styles",
+    "desc": "Deux styles",
+    "input": "Mon Film - styleA - styleB.mp4",
+    "styles": ["styleA", "styleB"],
+    "expect": {
+      "valid": true,
+      "styles": ["styleA", "styleB"]
+    }
+  },
+  {
+    "id": "date_iso",
+    "desc": "Date ISO AAAA-MM-JJ",
+    "input": "Mon Film - styleA - 2024-01-15.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "date": "2024-01-15"
+    }
+  },
+  {
+    "id": "date_reversed",
+    "desc": "Date inversée JJ-MM-AAAA",
+    "input": "Mon Film - styleA - 15-01-2024.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "date": "2024-01-15"
+    }
+  },
+  {
+    "id": "date_partial_year_month",
+    "desc": "Date partielle AAAA-MM",
+    "input": "Mon Film - styleA - 2024-01.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "date": "2024-01"
+    }
+  },
+  {
+    "id": "date_year_only",
+    "desc": "Date année seule",
+    "input": "Mon Film - styleA - 2024.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "date": "2024"
+    }
+  },
+  {
+    "id": "date_dot_separator",
+    "desc": "Date avec point comme séparateur",
+    "input": "Mon Film - styleA - 2024.01.15.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "date": "2024-01-15"
+    }
+  },
+  {
+    "id": "boolean_pov",
+    "desc": "Booléen POV",
+    "input": "Mon Film - styleA - POV.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "booleans": {"POV": true, "3D": false, "NOCUT": false}
+    }
+  },
+  {
+    "id": "boolean_3d_nocut",
+    "desc": "Booléens 3D + NOCUT combinés",
+    "input": "Mon Film - styleA - 3D - NOCUT.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "booleans": {"POV": false, "3D": true, "NOCUT": true}
+    }
+  },
+  {
+    "id": "crop_global",
+    "desc": "Option CROP(WxH) globale",
+    "input": "Mon Film - styleA - CROP(1800x800).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "crop": {"w": 1800, "h": 800}
+    }
+  },
+  {
+    "id": "chapter_minimal",
+    "desc": "Un chapitre sans titre ni durée",
+    "input": "Mon Film - styleA - 06-19(Scene).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "chapters_count": 1,
+      "chapters": [
+        {
+          "timestamp_original": "06-19",
+          "timestamp_seconds": 379,
+          "duration": 30,
+          "title": "Scene",
+          "pos_explicit": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "chapter_with_duration",
+    "desc": "Chapitre avec durée explicite",
+    "input": "Mon Film - styleA - 06-19(81)(Scene).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "chapters": [
+        {
+          "timestamp_original": "06-19",
+          "timestamp_seconds": 379,
+          "duration": 81,
+          "title": "Scene"
+        }
+      ]
+    }
+  },
+  {
+    "id": "chapter_with_position",
+    "desc": "Chapitre avec position crop (X x Y)",
+    "input": "Mon Film - styleA - 06-19(81)(Scene)(120x45).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "chapters": [
+        {
+          "timestamp_original": "06-19",
+          "duration": 81,
+          "title": "Scene",
+          "pos_x": 120,
+          "pos_y": 45,
+          "pos_explicit": true,
+          "pos_mode": "topleft"
+        }
+      ]
+    }
+  },
+  {
+    "id": "chapter_center",
+    "desc": "Chapitre avec position CENTER",
+    "input": "Mon Film - styleA - 06-19(Scene)(CENTER).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "chapters": [
+        {
+          "pos_mode": "center",
+          "pos_explicit": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "chapter_no_title_fallback_style",
+    "desc": "Dernier chapitre sans titre : fallback vers style",
+    "input": "Mon Film - styleA - 06-19(81).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "chapters": [
+        {
+          "title": "styleA",
+          "title_from_style": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "chapter_sort",
+    "desc": "Chapitres dans le désordre — tri chronologique attendu",
+    "input": "Mon Film - styleA - 10-00(Fin) - 06-19(Milieu) - 01-00(Début).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "chapters_count": 3,
+      "chapters": [
+        {"timestamp_original": "01-00", "timestamp_seconds": 60},
+        {"timestamp_original": "06-19", "timestamp_seconds": 379},
+        {"timestamp_original": "10-00", "timestamp_seconds": 600}
+      ]
+    }
+  },
+  {
+    "id": "multi_chapter_fallback_prev_title",
+    "desc": "Dernier chapitre sans titre, pas de styles : fallback titre précédent",
+    "input": "Mon Film - styleA - 01-00(Debut) - 06-19(81).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "chapters": [
+        {"title": "Debut", "title_from_style": false},
+        {"title": "styleA", "title_from_style": true}
+      ]
+    }
+  },
+  {
+    "id": "encode_option",
+    "desc": "Option ENCODE(h265)",
+    "input": "Mon Film - styleA - ENCODE(h265).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "encode": "h265"
+    }
+  },
+  {
+    "id": "resize_option",
+    "desc": "Option RESIZE(1080p)",
+    "input": "Mon Film - styleA - RESIZE(1080p).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "resize": "1080p"
+    }
+  },
+  {
+    "id": "thumb_option",
+    "desc": "Option THUMB(timestamp)",
+    "input": "Mon Film - styleA - THUMB(02-30).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "thumb": {"timestamp_original": "02-30", "timestamp_seconds": 150}
+    }
+  },
+  {
+    "id": "file_id",
+    "desc": "ID numérique {1042}",
+    "input": "Mon Film - styleA - {1042}.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "file_id": 1042
+    }
+  },
+  {
+    "id": "full_kitchen_sink",
+    "desc": "Nom complet avec tous les tokens",
+    "input": "[Studio] - Mon Film - @Alice, Bob@ - styleA - styleB# - 2024-01-15 - POV - CROP(1800x800) - 01-00(60)(Intro)(0x0) - 06-19(81)(Scene)(120x45) - THUMB(02-30) - ENCODE(h265) - RESIZE(1080p) - {1042}.mp4",
+    "styles": ["styleA", "styleB"],
+    "expect": {
+      "valid": true,
+      "studio": "Studio",
+      "actors": ["Alice", "Bob"],
+      "styles": ["styleA", "styleB"],
+      "star": true,
+      "title": "Mon Film",
+      "date": "2024-01-15",
+      "booleans": {"POV": true, "3D": false, "NOCUT": false},
+      "crop": {"w": 1800, "h": 800},
+      "chapters_count": 2,
+      "encode": "h265",
+      "resize": "1080p",
+      "file_id": 1042,
+      "thumb": {"timestamp_original": "02-30", "timestamp_seconds": 150}
+    }
+  },
+  {
+    "id": "no_extension",
+    "desc": "Nom sans extension (display_name sans .ext)",
+    "input": "Mon Film - styleA",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "extension": "",
+      "title": "Mon Film"
+    }
+  },
+  {
+    "id": "style_trailing_s_correction",
+    "desc": "Style avec 's' final toléré (correction auto)",
+    "input": "Mon Film - styleAs.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "styles": ["styleA"]
+    }
+  },
+  {
+    "id": "timestamp_hh_mm_ss",
+    "desc": "Timestamp HH-MM-SS",
+    "input": "Mon Film - styleA - 01-30-45(Scene).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "chapters": [
+        {"timestamp_original": "01-30-45", "timestamp_seconds": 5445}
+      ]
+    }
+  },
+  {
+    "id": "timestamp_ss_only",
+    "desc": "Timestamp secondes brutes",
+    "input": "Mon Film - styleA - 379(Scene).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "chapters": [
+        {"timestamp_original": "379", "timestamp_seconds": 379}
+      ]
+    }
+  },
+  {
+    "id": "title_with_dashes",
+    "desc": "Titre contenant des tirets (plusieurs tokens titre)",
+    "input": "Mon - Super - Film - styleA.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "title": "Mon - Super - Film"
+    }
+  },
+  {
+    "_comment": "=== CAS INVALIDES ==="
+  },
+  {
+    "id": "no_style",
+    "desc": "Pas de style — invalide",
+    "input": "Mon Film.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": false
+    }
+  },
+  {
+    "id": "unknown_style",
+    "desc": "Style inconnu — invalide",
+    "input": "Mon Film - styleZ.mp4",
+    "styles": ["styleA", "styleB"],
+    "expect": {
+      "valid": false
+    }
+  },
+  {
+    "id": "crop_zero_dimension",
+    "desc": "CROP avec dimension nulle — ignoré (pas de crop dans le résultat)",
+    "input": "Mon Film - styleA - CROP(0x800).mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "crop": null
+    }
+  },
+  {
+    "id": "chapter_no_parens",
+    "desc": "Token timestamp sans parenthèses — NON reconnu comme chapitre",
+    "input": "Mon Film - styleA - 06-19.mp4",
+    "styles": ["styleA"],
+    "expect": {
+      "valid": true,
+      "chapters_count": 0,
+      "title": "Mon Film - 06-19"
+    }
+  },
+  {
+    "id": "empty_styles_list",
+    "desc": "Liste styles vide (config absente) : validation désactivée — invalide car rien détecté",
+    "input": "Mon Film - styleA.mp4",
+    "styles": [],
+    "expect": {
+      "valid": false
+    }
+  }
+]
