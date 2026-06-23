@@ -53,8 +53,11 @@ def resolve_target(target_str: str | None) -> Path | None:
 def build_view(headless: bool, web: bool):
     """Instancie la vue appropriée. Priorité : web > tk > cli."""
     if web:
-        from video_processor.ui.web_view import WebView
-        return WebView()
+        try:
+            from video_processor.ui.web_view import WebView
+            return WebView()
+        except ImportError:
+            log.warning("web_view non disponible — bascule CLI")
     if not headless:
         try:
             import tkinter  # noqa: F401

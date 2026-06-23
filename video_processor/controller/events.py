@@ -2,89 +2,97 @@
 File: events.py
 Path: video_processor/controller/events.py
 
-Version: 0.1.0
+Version: 0.2.0
 Date: 2026-06-23
 
 Changelog:
-- 0.1.0 (2026-06-23): Squelette initial — tous les événements contrôleur → vue
+- 0.2.0 (2026-06-23): Révision design — événements minimalistes, frozen=True
+  * EvtAllCropsInvalidated : signal pur (pas de données)
+  * EvtCropsResolved : nouvel événement portant les crops recalculés
+  * EvtChapterChanged : transporte index uniquement (la vue a déjà le VideoFile)
+  * EvtCropChanged : crop devient Optional (peut être None si supprimé)
+  * frozen=True sur tous les dataclasses
+- 0.1.0 (2026-06-23): Squelette initial
 """
 
 from __future__ import annotations
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from PIL import Image as PILImage
-    from video_processor.domain.crop_zone import CropZone
+    from PIL.Image import Image as PILImage
+    from video_processor.domain.crop_zone  import CropZone
     from video_processor.domain.video_file import VideoFile
-    from video_processor.domain.chapter import Chapter
 
 
 # ── Chargement ────────────────────────────────────────────────────────────────
 
-@dataclass
+@dataclass(frozen=True)
 class EvtSessionLoaded:
-    """Nouveau fichier chargé et prêt."""
+    """Nouveau fichier chargé et prêt. La vue stocke video_file pour la session."""
     video_file: "VideoFile"
 
-@dataclass
+@dataclass(frozen=True)
 class EvtStatus:
     text: str
 
-@dataclass
+@dataclass(frozen=True)
 class EvtTitle:
     text: str
 
-@dataclass
+@dataclass(frozen=True)
 class EvtDirty:
-    """L'état courant a des modifications non sauvegardées."""
+    """Modifications non sauvegardées présentes ou effacées."""
     is_dirty: bool
 
 
 # ── Navigation chapitres ──────────────────────────────────────────────────────
 
-@dataclass
+@dataclass(frozen=True)
 class EvtChapterChanged:
-    """Le chapitre actif a changé."""
-    chapter: "Chapter"
-    index:   int
+    """Le chapitre actif a changé. La vue retrouve chapters[index] via son VideoFile."""
+    index: int
 
-@dataclass
+@dataclass(frozen=True)
 class EvtChaptersUpdated:
     """La liste des chapitres a été modifiée (ajout, suppression, bords)."""
-    chapters: list
+    chapters: list   # list[Chapter]
 
 
 # ── Crop ──────────────────────────────────────────────────────────────────────
 
-@dataclass
+@dataclass(frozen=True)
+class EvtAllCropsInvalidated:
+    """Signal pur : caches visuels obsolètes, la vue doit tout effacer.
+    Suivi de EvtCropsResolved quand les nouveaux crops sont prêts.
+    """
+    pass
+
+@dataclass(frozen=True)
+class EvtCropsResolved:
+    """Crops recalculés après resolve_inheritance(). Un par chapitre."""
+    crops: list   # list[Optional[CropZone]]
+
+@dataclass(frozen=True)
 class EvtCropChanged:
     """Le crop effectif d'un chapitre a changé."""
     chapter_index: int
     crop:          Optional["CropZone"]
     inherited:     bool
 
-@dataclass
-class EvtAllCropsInvalidated:
-    """La taille globale a changé — toutes les vignettes sont à redessiner."""
-    crops: list   # list[Optional[CropZone]], un par chapitre
-
 
 # ── Media ─────────────────────────────────────────────────────────────────────
 
-@dataclass
+@dataclass(frozen=True)
 class EvtFrameReady:
-    """Image principale prête pour affichage."""
     chapter_index: int
-    image:         "PILImage"
+    image:         "PILImage"   # PIL.Image.Image au runtime
     crop:          Optional["CropZone"]
     inherited:     bool
     timestamp_sec: int
 
-@dataclass
+@dataclass(frozen=True)
 class EvtThumbReady:
-    """Vignette prête pour le strip."""
     chapter_index: int
     image:         "PILImage"
     crop:          Optional["CropZone"]
