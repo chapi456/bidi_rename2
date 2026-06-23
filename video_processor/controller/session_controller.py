@@ -37,7 +37,6 @@ class SessionController:
     def __init__(self, session: VideoSession, config: dict):
         log.debug("BOUCHON SessionController.__init__()")
         self._session  = session
-        self._config   = config
         self._vf:      Optional[VideoFile] = None
         self._handlers: list[EventHandler] = []
         self._lock     = threading.Lock()
