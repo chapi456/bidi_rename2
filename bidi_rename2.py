@@ -2,10 +2,11 @@
 File: bidi_rename2.py
 Path: bidi_rename2.py
 
-Version: 0.2.0
+Version: 0.3.0
 Date: 2026-06-23
 
 Changelog:
+- 0.3.0 (2026-06-23): main() simplifié — plus de câblage manuel, singletons
 - 0.2.0 (2026-06-23): Fix import — sys.path injecté avant tout import applicatif
 - 0.1.0 (2026-06-23): Squelette initial
 """
@@ -39,10 +40,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def resolve_target(target_str: str | None) -> Path | None:
-    """Résout l'argument cible en Path absolu.
-    Retourne None si absent (→ scan répertoires config).
-    """
-    log.debug("resolve_target(%s)", target_str)
+    """Résout l'argument cible en Path absolu. None si absent."""
     if target_str is None:
         return None
     p = Path(target_str).resolve()
@@ -53,15 +51,10 @@ def resolve_target(target_str: str | None) -> Path | None:
 
 
 def build_view(headless: bool, web: bool):
-    """Instancie la vue appropriée selon l'environnement.
-    Priorité : web > tk > cli.
-    """
-    log.debug("build_view(headless=%s, web=%s)", headless, web)
-
+    """Instancie la vue appropriée. Priorité : web > tk > cli."""
     if web:
         from video_processor.ui.web_view import WebView
         return WebView()
-
     if not headless:
         try:
             import tkinter  # noqa: F401
@@ -70,31 +63,31 @@ def build_view(headless: bool, web: bool):
             return TkinterView()
         except ImportError:
             log.warning("tkinter indisponible — bascule CLI")
-
     from video_processor.ui.cli_view import CliView
     log.debug("→ CliView")
     return CliView()
 
 
 def main() -> None:
-    args   = parse_args()
+    args = parse_args()
+
+    # 1. Config en premier (singleton, chemin optionnel CLI)
+    from video_processor.infra.config_loader import AppConfig
+    AppConfig.load(args.config)     # initialise le singleton
+
+    # 2. Session — se procure scanner et config elle-même
+    from video_processor.domain.session import VideoSession
+    session = VideoSession.get()
+
+    # 3. Cible optionnelle (argument CLI)
     target = resolve_target(args.target)
-
-    # Imports applicatifs — sys.path déjà fixé ci-dessus
-    from video_processor.infra.config_loader           import AppConfig
-    from video_processor.infra.directory_scanner       import DirectoryScanner
-    from video_processor.domain.session                import VideoSession
-    from video_processor.controller.session_controller import SessionController
-
-    cfg     = AppConfig(args.config)
-    scanner = DirectoryScanner(cfg)
-    session = VideoSession(scanner.entries, cfg)
-
     if target:
         session.set_current_by_path(target)
 
+    # 4. Vue + contrôleur
+    from video_processor.controller.session_controller import SessionController
     view       = build_view(args.headless, args.web)
-    controller = SessionController(session, cfg)
+    controller = SessionController(session)
 
     view.bind(controller)
     controller.open_current()
