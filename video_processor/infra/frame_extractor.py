@@ -15,14 +15,16 @@ Changelog:
 """
 
 from __future__ import annotations
-
 import json
 import logging
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from PIL.Image import Image as PILImage
+    
 log = logging.getLogger("infra.frame_extractor")
 
 # ── Constantes configurables ──────────────────────────────────────────────────
@@ -96,7 +98,7 @@ class FrameExtractor:
         video_path: Path,
         ts_sec: int,
         size: Optional[Tuple[int, int]] = None,
-    ) -> Optional[object]:
+    ) -> Optional["PILImage"]:
         """Extrait une frame à ts_sec et retourne une PIL.Image.
 
         Args:
@@ -166,6 +168,6 @@ class FrameExtractor:
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     @staticmethod
-    def extract_thumb(video_path: Path, ts_sec: int) -> Optional[object]:
+    def extract_thumb(video_path: Path, ts_sec: int) -> Optional["PILImage"]:
         """Raccourci : extrait une vignette à THUMB_SIZE."""
         return FrameExtractor.extract(video_path, ts_sec, size=THUMB_SIZE)
