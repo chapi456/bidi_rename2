@@ -209,7 +209,7 @@ class TkinterView(BaseView):
                             width=6, command=self._on_crop_spinbox)
             sp.pack(side=tk.LEFT)
 
-        tk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
 
         # Navigation
         for text, cmd in [
@@ -222,7 +222,7 @@ class TkinterView(BaseView):
                       command=lambda c=cmd: self._send(c),
                       relief=tk.FLAT).pack(fill=tk.X, padx=6, pady=1)
 
-        tk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
 
         # Actions crop
         for text, cmd in [
@@ -234,7 +234,7 @@ class TkinterView(BaseView):
                       command=lambda c=cmd: self._send(c),
                       relief=tk.FLAT).pack(fill=tk.X, padx=6, pady=1)
 
-        tk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
 
         tk.Button(panel, text="💾 Save",
                   bg="#2A4A2A", fg="#88FF88",
@@ -263,7 +263,7 @@ class TkinterView(BaseView):
                             width=6, command=self._on_position_spinbox)
             sp.pack(side=tk.LEFT)
 
-        tk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
 
         # Presets
         tk.Label(panel, text="Présets", bg=BG_PANEL, fg=FG,
@@ -277,7 +277,7 @@ class TkinterView(BaseView):
                           CMD.CmdSetPosition(preset=p)
                       )).pack(side=tk.LEFT, padx=2)
 
-        tk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
 
         # Seek ch start/end
         for text, cmd in [
@@ -288,7 +288,7 @@ class TkinterView(BaseView):
                       command=lambda c=cmd: self._send(c),
                       relief=tk.FLAT).pack(fill=tk.X, padx=6, pady=1)
 
-        tk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
 
         tk.Button(panel, text="✕ Quitter",
                   bg="#4A1A1A", fg="#FF8888",
