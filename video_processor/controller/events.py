@@ -57,7 +57,8 @@ class EvtChapterChanged:
 class EvtChaptersUpdated:
     """La liste des chapitres a été modifiée (ajout, suppression, bords)."""
     chapters: list   # list[Chapter]
-
+    full_rebuild:  bool = True    # False = seul chapter_index a changé
+    chapter_index: int  = 0
 
 # ── Crop ──────────────────────────────────────────────────────────────────────
 
@@ -97,3 +98,8 @@ class EvtThumbReady:
     image:         "PILImage"
     crop:          Optional["CropZone"]
     inherited:     bool
+    
+    
+@dataclass
+class EvtPositionChanged:
+    timestamp_sec: int

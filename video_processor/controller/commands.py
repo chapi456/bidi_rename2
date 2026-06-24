@@ -131,3 +131,7 @@ class CmdLoadFile:
 @dataclass(frozen=True)
 class CmdQuit:
     pass
+
+@dataclass(frozen=True)
+class CmdRefreshThumb:
+    chapter_index: int

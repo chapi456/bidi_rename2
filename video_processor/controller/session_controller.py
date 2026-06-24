@@ -99,6 +99,7 @@ class SessionController:
             CMD.CmdAddChapter:       self._on_add_chapter,
             CMD.CmdEditChapter:      self._on_edit_chapter,
             CMD.CmdChapterEdge:      self._on_chapter_edge,
+            CMD.CmdRefreshThumb:     self._on_refresh_thumb,
             CMD.CmdSave:             self._on_save,
             CMD.CmdSaveAndNext:      self._on_save_and_next,
             CMD.CmdNextFile:         self._on_next_file,
@@ -263,18 +264,25 @@ class SessionController:
             if img is None or self._vf is not vf:
                 return
             ch.frame_raw = img
-            scale    = min(1.0, 960 / vf.video_w) if vf.video_w > 0 else 1.0
-            rendered = Renderer.render_frame(ch, scale)
-            self._emit(EVT.EvtFrameReady(
-                chapter_index=chapter_index,
-                image=rendered or img,
-                crop=ch.crop_effective,
-                inherited=ch.is_inherited,
-                timestamp_sec=ts,
-            ))
+            self._emit_frame_from_raw(vf, ch, ts)
         finally:
             ch.frame_loading = False
 
+    def _emit_frame_from_raw(self, vf: VideoFile, ch: Chapter, ts: int) -> None:
+        """Render ch.frame_raw avec le crop courant et émet EvtFrameReady."""
+        from video_processor.infra.renderer import Renderer
+        scale    = min(1.0, 960 / vf.video_w) if vf.video_w > 0 else 1.0
+        rendered = Renderer.render_frame(ch, scale)
+        image = rendered or ch.frame_raw
+        if image is None:
+            return
+        self._emit(EVT.EvtFrameReady(
+            chapter_index=ch.index,
+            image=image,
+            crop=ch.crop_effective,
+            inherited=ch.is_inherited,
+            timestamp_sec=ts,
+        ))
     # ── Helpers ───────────────────────────────────────────────────────────
 
     @property
@@ -299,10 +307,10 @@ class SessionController:
         threading.Thread(target=self._preload_thumbs, daemon=True).start()
 
     def _seek(self, ts: int) -> None:
-        """Seek interne : met à jour _current_ts et charge la frame."""
         assert self._vf is not None
         self._current_ts = max(0, min(ts, self._vf.total_duration_sec))
         idx = self._vf.chapter_at_time(self._current_ts)
+        self._emit(EVT.EvtPositionChanged(timestamp_sec=self._current_ts))
         threading.Thread(
             target=self._load_frame, args=(idx, self._current_ts), daemon=True
         ).start()
@@ -318,6 +326,7 @@ class SessionController:
         if ch:
             self._current_ts = ch.timestamp_sec
         self._emit(EVT.EvtChapterChanged(index=cmd.chapter_index))
+        self._emit(EVT.EvtPositionChanged(timestamp_sec=self._current_ts))
         threading.Thread(
             target=self._load_frame, args=(cmd.chapter_index,), daemon=True
         ).start()
@@ -387,12 +396,20 @@ class SessionController:
         assert self._vf is not None
         ch = self._active_chapter
         if ch and ch.crop_effective:
-            eff = ch.crop_effective
+            eff    = ch.crop_effective
+            vw, vh = self._vf.video_w, self._vf.video_h
+            new_w  = cmd.w     if cmd.w     is not None else eff.w
+            new_h  = cmd.h     if cmd.h     is not None else eff.h
+            new_x  = cmd.pos_x if cmd.pos_x is not None else eff.pos_x
+            new_y  = cmd.pos_y if cmd.pos_y is not None else eff.pos_y
+            # Clamp
+            new_w  = max(10, min(new_w, vw))
+            new_h  = max(10, min(new_h, vh))
+            new_x  = max(0,  min(new_x, vw - new_w))
+            new_y  = max(0,  min(new_y, vh - new_h))
             ch.crop_explicit = CropZone(
-                w=cmd.w         if cmd.w     is not None else eff.w,
-                h=cmd.h         if cmd.h     is not None else eff.h,
-                pos_x=cmd.pos_x if cmd.pos_x is not None else eff.pos_x,
-                pos_y=cmd.pos_y if cmd.pos_y is not None else eff.pos_y,
+                w=new_w, h=new_h,
+                pos_x=new_x, pos_y=new_y,
                 pos_mode=eff.pos_mode,
                 explicit=True,
             )
@@ -402,6 +419,8 @@ class SessionController:
                 crop=ch.crop_effective,
                 inherited=ch.is_inherited,
             ))
+            if ch.frame_raw is not None:
+                self._emit_frame_from_raw(self._vf, ch, self._current_ts)
         self._emit(EVT.EvtDirty(is_dirty=True))
 
     def _on_set_position(self, cmd: CMD.CmdSetPosition) -> None:
@@ -410,14 +429,17 @@ class SessionController:
         assert self._vf is not None
         ch = self._active_chapter
         if ch and ch.crop_effective:
-            vw, vh = self._vf.video_w, self._vf.video_h
+            vw, vh   = self._vf.video_w, self._vf.video_h
             cw, ch_h = ch.crop_effective.w, ch.crop_effective.h
-            presets = {
+            presets  = {
                 "l": (0,              (vh - ch_h) // 2),
                 "c": ((vw - cw) // 2, (vh - ch_h) // 2),
                 "r": (vw - cw,        (vh - ch_h) // 2),
             }
             px, py = presets.get(cmd.preset, (cmd.pos_x or 0, cmd.pos_y or 0))
+            # Clamp dans les limites vidéo
+            px = max(0, min(px, vw - cw))
+            py = max(0, min(py, vh - ch_h))
             ch.crop_explicit = CropZone(
                 w=cw, h=ch_h,
                 pos_x=px, pos_y=py,
@@ -430,7 +452,10 @@ class SessionController:
                 crop=ch.crop_effective,
                 inherited=ch.is_inherited,
             ))
+            if ch.frame_raw is not None:
+                self._emit_frame_from_raw(self._vf, ch, self._current_ts)
         self._emit(EVT.EvtDirty(is_dirty=True))
+        
 
     def _on_copy_prev_crop(self, cmd: CMD.CmdCopyPrevCrop) -> None:
         if not self._require_vf():
@@ -522,12 +547,39 @@ class SessionController:
             return
         ch = self._vf.chapters[cmd.index]
         if cmd.kind == "start":
+            old_end          = ch.timestamp_sec + (ch.duration_sec or 0)
             ch.timestamp_sec = cmd.timestamp_sec
             ch.timestamp_raw = str(cmd.timestamp_sec)
+            if ch.duration_sec is not None:
+                ch.duration_sec = max(1, old_end - cmd.timestamp_sec)
         else:
-            ch.duration_sec = cmd.duration_sec
-        self._emit(EVT.EvtChaptersUpdated(chapters=self._vf.chapters))
+            ch.duration_sec = max(1, cmd.duration_sec)
+        self._emit(EVT.EvtChaptersUpdated(
+            chapters=self._vf.chapters,
+            full_rebuild=False,
+            chapter_index=cmd.index,
+        ))
         self._emit(EVT.EvtDirty(is_dirty=True))
+
+    def _on_refresh_thumb(self, cmd: CMD.CmdRefreshThumb) -> None:
+        if not self._require_vf():
+            return
+        assert self._vf is not None
+        if cmd.chapter_index >= len(self._vf.chapters):
+            return
+        ch = self._vf.chapters[cmd.chapter_index]
+        if ch.thumb_raw is None:
+            return
+        from video_processor.infra.renderer import Renderer
+        rendered = Renderer.render_thumb_scaled(ch, self._vf.video_w, self._vf.video_h)
+        if rendered:
+            self._emit(EVT.EvtThumbReady(
+                chapter_index=cmd.chapter_index,
+                image=rendered,
+                crop=ch.crop_effective,
+                inherited=ch.is_inherited,
+            ))
+
 
     # ── Handlers session ──────────────────────────────────────────────────
 

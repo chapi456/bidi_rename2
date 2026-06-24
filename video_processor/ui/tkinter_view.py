@@ -49,6 +49,16 @@ ACCENT        = "#4A90D9"
 FONT_LABEL    = ("Helvetica", 9)
 FONT_TITLE    = ("Helvetica", 11, "bold")
 
+HANDLE_CURSORS = [
+    "top_left_corner",   # 0 haut-gauche
+    "top_side",          # 1 milieu haut
+    "top_right_corner",  # 2 haut-droit
+    "right_side",        # 3 milieu droit
+    "bottom_right_corner", # 4 bas-droit
+    "bottom_side",       # 5 milieu bas
+    "bottom_left_corner", # 6 bas-gauche
+    "left_side",         # 7 milieu gauche
+]
 
 class TkinterView(BaseView):
     """Vue Tkinter.
@@ -72,7 +82,8 @@ class TkinterView(BaseView):
         self._seek_slider:  Optional[SeekSlider]   = None
         self._thumb_frames: list[tk.Label]         = []
         self._thumb_images: list[Optional[ImageTk.PhotoImage]] = []
-
+        self._thumb_labels: list[tk.Label] = []
+        
         # État canvas
         self._canvas_image: Optional[ImageTk.PhotoImage] = None
         self._canvas_scale: float = 1.0
@@ -112,6 +123,7 @@ class TkinterView(BaseView):
             EVT.EvtAllCropsInvalidated: self._on_all_crops_invalidated,
             EVT.EvtFrameReady:          self._on_frame_ready,
             EVT.EvtThumbReady:          self._on_thumb_ready,
+            EVT.EvtPositionChanged:     self._on_position_changed
         }
         h = handlers.get(type(event))
         if h:
@@ -189,6 +201,7 @@ class TkinterView(BaseView):
         self._canvas.bind("<ButtonPress-1>",   self._on_mouse_press)
         self._canvas.bind("<B1-Motion>",       self._on_mouse_move)
         self._canvas.bind("<ButtonRelease-1>", self._on_mouse_release)
+        self._canvas.bind("<Motion>", self._on_mouse_hover)
 
     def _build_left_panel(self, parent: tk.Widget) -> None:
         panel = tk.Frame(parent, bg=BG_PANEL, width=PANEL_W)
@@ -207,6 +220,8 @@ class TkinterView(BaseView):
                      width=3).pack(side=tk.LEFT)
             sp = tk.Spinbox(row, from_=0, to=9999, textvariable=var,
                             width=6, command=self._on_crop_spinbox)
+            sp.bind("<Return>",    lambda _: self._on_crop_spinbox())
+            sp.bind("<FocusOut>",  lambda _: self._on_crop_spinbox())
             sp.pack(side=tk.LEFT)
 
         ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
@@ -261,6 +276,8 @@ class TkinterView(BaseView):
             tk.Label(row, text=label, bg=BG_PANEL, fg=FG, width=3).pack(side=tk.LEFT)
             sp = tk.Spinbox(row, from_=-9999, to=9999, textvariable=var,
                             width=6, command=self._on_position_spinbox)
+            sp.bind("<Return>",   lambda _: self._on_position_spinbox())
+            sp.bind("<FocusOut>", lambda _: self._on_position_spinbox())
             sp.pack(side=tk.LEFT)
 
         ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
@@ -331,11 +348,19 @@ class TkinterView(BaseView):
             if ch:
                 self._seek_slider.set_position(ch.timestamp_sec)
                 self._update_crop_fields(ch.crop_effective)
-
+        if self._seek_slider:
+            self._seek_slider.set_active(evt.index)
+            
     def _on_chapters_updated(self, evt: EVT.EvtChaptersUpdated) -> None:
-        if self._vf:
+        if self._vf is None:
+            return
+        if evt.full_rebuild:
+            # Ajout/suppression de chapitre → recréer tous les widgets
             self._rebuild_thumb_strip()
-            self._seek_slider.reset(self._vf.chapters, self._vf.total_duration_sec)
+        else:
+            # Juste timestamp/durée modifiés → update label uniquement
+            self._update_thumb_cell(evt.chapter_index)
+        self._seek_slider.reset(self._vf.chapters, self._vf.total_duration_sec)
 
     def _on_crop_changed(self, evt: EVT.EvtCropChanged) -> None:
         if self._vf and evt.chapter_index == self._vf.active_index:
@@ -376,27 +401,47 @@ class TkinterView(BaseView):
         self._thumb_images[idx] = photo
         lbl.configure(image=photo)
 
+    def _on_position_changed(self, evt: EVT.EvtPositionChanged) -> None:
+        if self._seek_slider:
+            self._seek_slider.set_position(evt.timestamp_sec)
+
     # ── Thumb strip ────────────────────────────────────────────────────────
 
     def _rebuild_thumb_strip(self) -> None:
+        """Recrée tous les widgets (ajout/suppression de chapitre)."""
         if self._vf is None:
             return
         for w in self._strip_frame.winfo_children():
             w.destroy()
-        self._thumb_frames = []
-        self._thumb_images = []
+        self._thumb_frames  = []
+        self._thumb_images  = []
+        self._thumb_labels  = []   # labels texte (timestamp + durée)
         for i, ch in enumerate(self._vf.chapters):
             cell = tk.Frame(self._strip_frame, bg="#111", bd=1, relief=tk.RAISED)
             cell.pack(side=tk.LEFT, padx=2, pady=2)
-            lbl = tk.Label(cell, bg="#111", width=THUMB_W, height=THUMB_H,
-                           cursor="hand2")
-            lbl.pack()
-            lbl.bind("<Button-1>", lambda _, idx=i: self._on_thumb_click(idx))
-            tk.Label(cell, text=ch.label, bg="#111", fg=FG,
-                     font=FONT_LABEL).pack()
-            self._thumb_frames.append(lbl)
+            lbl_img = tk.Label(cell, bg="#111", width=THUMB_W, height=THUMB_H,
+                               cursor="hand2")
+            lbl_img.pack()
+            lbl_img.bind("<Button-1>", lambda _, idx=i: self._on_thumb_click(idx))
+            lbl_txt = tk.Label(cell, text=self._chapter_label(ch),
+                               bg="#111", fg=FG, font=FONT_LABEL)
+            lbl_txt.pack()
+            self._thumb_frames.append(lbl_img)
             self._thumb_images.append(None)
+            self._thumb_labels.append(lbl_txt)
 
+    def _update_thumb_cell(self, index: int) -> None:
+        """Met à jour label texte d'une cellule existante (sans recréer les widgets)."""
+        if self._vf is None or index >= len(self._thumb_labels):
+            return
+        ch = self._vf.chapters[index]
+        self._thumb_labels[index].configure(text=self._chapter_label(ch))
+
+    @staticmethod
+    def _chapter_label(ch: "Chapter") -> str:
+        dur = f" {ch.duration_sec}s" if ch.duration_sec else ""
+        return f"{ch.timestamp_raw}{dur}"
+        
     def _highlight_thumb(self, active_index: int) -> None:
         for i, lbl in enumerate(self._thumb_frames):
             lbl.master.configure(bg=ACCENT if i == active_index else "#111")
@@ -444,9 +489,16 @@ class TkinterView(BaseView):
             return
         d  = self._drag_state
         s  = self._canvas_scale
-        c0 = d["crop0"]
+        # Toujours lire le crop effectif courant (pas crop0 figé)
+        ch = self._vf.active_chapter if self._vf else None
+        if ch is None or ch.crop_effective is None:
+            return
+        c0 = ch.crop_effective
+        # Snap relatif à la position actuelle (pas au press initial)
         dx = int((event.x - d["snap_x"]) / s)
         dy = int((event.y - d["snap_y"]) / s)
+        d["snap_x"] = event.x   # glissement relatif au pixel précédent
+        d["snap_y"] = event.y
 
         if d["mode"] == "move":
             self._send(CMD.CmdSetCrop(
@@ -478,7 +530,37 @@ class TkinterView(BaseView):
             ))
 
     def _on_mouse_release(self, event: tk.Event) -> None:
+        if self._drag_state is not None and self._vf is not None:
+            # Demander un re-render du thumbnail du chapitre actif
+            self._send(CMD.CmdRefreshThumb(
+                chapter_index=self._vf.active_index
+            ))
         self._drag_state = None
+
+    def _on_mouse_hover(self, event: tk.Event) -> None:
+        if self._vf is None or self._canvas is None:
+            return
+        ch = self._vf.active_chapter
+        if ch is None or ch.crop_effective is None:
+            self._canvas.configure(cursor="crosshair")
+            return
+        from video_processor.infra.renderer import Renderer, HANDLE_R
+        handles = Renderer._handles(ch.crop_effective, self._canvas_scale)
+        for i, (hx, hy) in enumerate(handles):
+            if abs(event.x - hx) <= HANDLE_R + 3 and abs(event.y - hy) <= HANDLE_R + 3:
+                self._canvas.configure(cursor=HANDLE_CURSORS[i])
+                return
+        # Dans le rectangle crop → fleur (move)
+        c   = ch.crop_effective
+        s   = self._canvas_scale
+        cx1 = int(c.pos_x * s)
+        cy1 = int(c.pos_y * s)
+        cx2 = cx1 + int(c.w * s)
+        cy2 = cy1 + int(c.h * s)
+        if cx1 <= event.x <= cx2 and cy1 <= event.y <= cy2:
+            self._canvas.configure(cursor="fleur")
+        else:
+            self._canvas.configure(cursor="crosshair")
 
     # ── Spinbox crop ──────────────────────────────────────────────────────
 

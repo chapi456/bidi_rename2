@@ -1,8 +1,37 @@
-TODO1 : OK :  les ancres pour elargir les chapitres doivent être uniquement cliquable hors de la seekbar (en cliquant sur la fleche en haut ou en bas selon que c'est le debut ou la fin), sinon on ne peut pas seeker jusqu'au bout du chapitre sans activer les ancres.
-TODO2 : OK : en plus du titre du chapitre, afficher la durée dans la barre de thumbnail en bas : et la mettre à jour si elle est modifiée par les ancres.
-TODO3 : ajoute un bouton pour ajouter un chapitre à la position sur la seekbar, d'une durée de 30s par défaut. si possible, popup pour demander durée, et titre chapitre. 
-TODO4 : ajouter la possilité, en doublecliquand sur un chapitre (barre du bas), de changer textuellement le titre du chapitre, le timestamp et sa durée. 
+_TODO.txt — bidi_rename2
+========================
+Mis à jour : 2026-06-24
 
+## BUGS CONFIRMÉS (2026-06-24)
+[BUG-01] CropZone dépasse limites vidéo (pos_x/y négatifs, pos_x+w > video_w)
+         FIX : clamp dans _on_set_crop : pos_x = max(0, min(pos_x, vw-w))
 
+[BUG-02] Bord gauche chapitre allonge durée au lieu de déplacer à durée égale
+         FIX : _on_chapter_edge kind=start : new_dur = (old_ts + old_dur) - new_ts
 
+[BUG-03] Pas d'ancre start pour ch[0] si timestamp_sec > 0
+         FIX : seek_slider : if i==0 and ch.timestamp_sec > 0 → dessiner triangle
 
+[BUG-04] Curseur position (barre blanche) mal mis à jour après seek/jump
+         FIX : émettre EvtPositionChanged(ts) depuis controller, appeler set_position()
+
+[BUG-05] Clic seekbar autre chapitre n'active pas ce chapitre
+         FIX : SeekSlider._on_press → CmdJump si chapitre cible ≠ actif
+
+[BUG-06] Preset G/C/D : action envoyée, canvas pas mis à jour
+         FIX : _on_set_position → ajouter self._render_active_frame()
+
+[BUG-07] Highlight chapitre actif dans ruler au lieu de la piste seek
+         FIX : fond ACCENT dans zone piste [H_RULER..H] pour chapitre actif
+
+## AMÉLIORATIONS EN ATTENTE
+[TODO-05] Thumbnail refresh après drag crop (CmdRefreshThumb)
+[TODO-06] EvtChaptersUpdated : full_rebuild + chapter_index
+[TODO-07] Spinbox <Return>/<FocusOut> manquants
+[TODO-08] Patch _on_mouse_move resize crop (crop0 figé → relire crop_effective)
+[TODO-09] Bouton "Ajouter chapitre" dans panneau gauche (= TODO3)
+[TODO-10] _version: int dans Chapter et VideoFile (setters, coût zéro)
+[TODO-11] Bouchons : BaseView.bind, Chapter.invalidate_display, _on_save
+[TODO-12] SeekSlider tooltip timestamp au survol
+[TODO-13] Combobox fichier : tous les fichiers de session
+[TODO-14] Double-clic thumbnail → popup édition (= TODO4)
