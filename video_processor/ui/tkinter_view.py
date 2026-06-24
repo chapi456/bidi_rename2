@@ -18,11 +18,12 @@ Changelog:
 
 from __future__ import annotations
 
+from curses import panel
 import logging
 import queue
 import tkinter as tk
 from tkinter import ttk
-from typing import Optional, TYPE_CHECKING
+from typing import Callable, Optional, TYPE_CHECKING
 
 from PIL import ImageTk
 
@@ -85,6 +86,7 @@ class TkinterView(BaseView):
         self._thumb_labels: list[tk.Label] = []
         
         # État canvas
+        self._canvas_offset: tuple[int, int] = (0, 0)
         self._canvas_image: Optional[ImageTk.PhotoImage] = None
         self._canvas_scale: float = 1.0
         self._drag_state:   Optional[dict] = None   # {mode, handle_idx, snap_x, snap_y, crop0}
@@ -94,6 +96,8 @@ class TkinterView(BaseView):
         self._var_h:   Optional[tk.IntVar] = None
         self._var_x:   Optional[tk.IntVar] = None
         self._var_y:   Optional[tk.IntVar] = None
+        
+        self._current_ts_ui: float = 0.0
 
     # ── Liaison contrôleur ─────────────────────────────────────────────────
 
@@ -218,10 +222,10 @@ class TkinterView(BaseView):
             row.pack(fill=tk.X, padx=6, pady=2)
             tk.Label(row, text=label, bg=BG_PANEL, fg=FG,
                      width=3).pack(side=tk.LEFT)
-            sp = tk.Spinbox(row, from_=-9999, to=9999, textvariable=var,
-                            width=6, command=self._on_position_spinbox)
-            sp.bind("<Return>",   lambda _e: self._on_position_spinbox())
-            sp.bind("<FocusOut>", lambda _e: self._on_position_spinbox())
+            sp = tk.Spinbox(row, from_=1, to=9999, textvariable=var,
+                            width=6, command=self._on_crop_spinbox)
+            sp.bind("<Return>",   lambda _e: self._on_crop_spinbox())
+            sp.bind("<FocusOut>", lambda _e: self._on_crop_spinbox())
             sp.pack(side=tk.LEFT)
 
         ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
@@ -259,6 +263,29 @@ class TkinterView(BaseView):
                   bg="#2A4A2A", fg="#88FF88",
                   command=lambda: self._send(CMD.CmdSaveAndNext()),
                   relief=tk.FLAT).pack(fill=tk.X, padx=6, pady=2)
+        
+        ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        tk.Label(panel, text="FICHIER", bg=BG_PANEL, fg=ACCENT,
+                 font=FONT_TITLE).pack(pady=(4, 2))
+        self._info_vars: dict[str, tk.StringVar] = {}
+        for key in ("Studio", "Acteur(s)", "Date", "Style(s)", "Titre"):
+            row = tk.Frame(panel, bg=BG_PANEL)
+            row.pack(fill=tk.X, padx=6, pady=1)
+            tk.Label(row, text=f"{key}:", bg=BG_PANEL, fg="#888888",
+                     font=FONT_LABEL, width=8, anchor=tk.W).pack(side=tk.LEFT)
+            var = tk.StringVar(value="—")
+            lbl = tk.Label(row, textvariable=var, bg=BG_PANEL, fg=FG,
+                           font=FONT_LABEL, anchor=tk.W, wraplength=110)
+            lbl.pack(side=tk.LEFT, fill=tk.X)
+            lbl.bind("<Double-Button-1>",
+                     lambda _e, k=key: self._on_edit_file_info(k))
+            self._info_vars[key] = var
+
+        ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        tk.Button(panel, text="+ Chapitre ici",
+                  bg=BG_PANEL, fg=ACCENT,
+                  command=self._on_add_chapter_here,
+                  relief=tk.FLAT).pack(fill=tk.X, padx=6, pady=1)
 
     def _build_right_panel(self, parent: tk.Widget) -> None:
         panel = tk.Frame(parent, bg=BG_PANEL, width=PANEL_W)
@@ -312,7 +339,123 @@ class TkinterView(BaseView):
                   command=lambda: self._send(CMD.CmdQuit()),
                   relief=tk.FLAT).pack(fill=tk.X, padx=6, pady=2)
 
+        ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        tk.Label(panel, text="CHAPITRE", bg=BG_PANEL, fg=ACCENT,
+                 font=FONT_TITLE).pack(pady=(4, 2))
+        self._ch_info_vars: dict[str, tk.StringVar] = {}
+        for key in ("Titre", "Début", "Durée", "Crop"):
+            row = tk.Frame(panel, bg=BG_PANEL)
+            row.pack(fill=tk.X, padx=6, pady=1)
+            tk.Label(row, text=f"{key}:", bg=BG_PANEL, fg="#888888",
+                     font=FONT_LABEL, width=6, anchor=tk.W).pack(side=tk.LEFT)
+            var = tk.StringVar(value="—")
+            lbl = tk.Label(row, textvariable=var, bg=BG_PANEL, fg=FG,
+                           font=FONT_LABEL, anchor=tk.W, wraplength=120)
+            lbl.pack(side=tk.LEFT, fill=tk.X)
+            lbl.bind("<Double-Button-1>",
+                     lambda _e, k=key: self._on_edit_chapter_info(k))
+            self._ch_info_vars[key] = var
+
     # ── Handlers événements ────────────────────────────────────────────────
+
+    def _update_info_panels(self) -> None:
+        if self._vf is None:
+            return
+        vf = self._vf
+
+        def fmt_ts(sec: int) -> str:
+            h, rem = divmod(sec, 3600)
+            m, s   = divmod(rem, 60)
+            return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+        def fmt_dur(sec: int) -> str:
+            if sec < 60:
+                return f"{sec}s"
+            m, s = divmod(sec, 60)
+            return f"{m}:{s:02d}"
+
+        if hasattr(self, "_info_vars"):
+            self._info_vars["Studio"].set(vf.studio or "—")
+            self._info_vars["Acteur(s)"].set(", ".join(vf.actors) if vf.actors else "—")
+            self._info_vars["Date"].set(str(vf.date) if vf.date else "—")
+            self._info_vars["Style(s)"].set(", ".join(vf.styles) if vf.styles else "—")
+            self._info_vars["Titre"].set(vf.title or "—")
+
+        ch = vf.active_chapter
+        if ch and hasattr(self, "_ch_info_vars"):
+            self._ch_info_vars["Titre"].set(ch.title or "—")
+            self._ch_info_vars["Début"].set(fmt_ts(ch.timestamp_sec))
+            self._ch_info_vars["Durée"].set(fmt_dur(ch.duration_sec) if ch.duration_sec else "—")
+            crop_st = "hérité" if ch.is_inherited else ("oui" if ch.crop_effective else "non")
+            self._ch_info_vars["Crop"].set(crop_st)
+            
+    def _on_add_chapter_here(self) -> None:
+        ts = int(self._current_ts_ui)
+        self._send(CMD.CmdAddChapter(
+            timestamp_sec=ts,
+            duration_sec=0,
+            title="",
+        ))         
+            
+    def _on_edit_file_info(self, key: str) -> None:
+        """Popup édition d'un champ du fichier (TODO-16)."""
+        if self._vf is None:
+            return
+        current = self._info_vars.get(key, tk.StringVar()).get()
+        self._popup_edit(
+            title=f"Éditer : {key}",
+            current=current,
+            on_ok=lambda val: self._apply_file_info(key, val),
+        )
+
+    def _on_edit_chapter_info(self, key: str) -> None:
+        """Popup édition d'un champ du chapitre actif (TODO-17)."""
+        if self._vf is None or self._vf.active_chapter is None:
+            return
+        current = self._ch_info_vars.get(key, tk.StringVar()).get()
+        self._popup_edit(
+            title=f"Éditer chapitre : {key}",
+            current=current,
+            on_ok=lambda val: self._apply_chapter_info(key, val),
+        )
+
+    def _popup_edit(self, title: str, current: str,
+                    on_ok: Callable[[str], None]) -> None:
+        """Fenêtre modale générique : label + Entry + OK/Cancel."""
+        from tkinter import simpledialog
+        result = simpledialog.askstring(title, title, initialvalue=current,
+                                        parent=self._root)
+        if result is not None:
+            on_ok(result)
+
+    def _apply_file_info(self, key: str, value: str) -> None:
+        # TODO-16 : mapper key → CmdEdit* quand les commandes seront créées
+        log.info("_apply_file_info(%s=%r) — non implémenté", key, value)
+
+    def _apply_chapter_info(self, key: str, value: str) -> None:
+        if self._vf is None or self._vf.active_chapter is None:
+            return
+        ch = self._vf.active_chapter
+        if key == "Titre":
+            self._send(CMD.CmdEditChapter(
+                index=ch.index,
+                title=value,
+                timestamp_sec=ch.timestamp_sec,
+                timestamp_raw=ch.timestamp_raw,
+                duration_sec=ch.duration_sec or 0,
+            ))
+        elif key == "Durée":
+            try:
+                dur = self._parse_duration(value)
+                self._send(CMD.CmdEditChapter(
+                    index=ch.index,
+                    title=ch.title or "",
+                    timestamp_sec=ch.timestamp_sec,
+                    timestamp_raw=ch.timestamp_raw,
+                    duration_sec=dur,
+                ))
+            except ValueError:
+                pass
 
     def _on_session_loaded(self, evt: EVT.EvtSessionLoaded) -> None:
         self._vf = evt.video_file
@@ -326,6 +469,19 @@ class TkinterView(BaseView):
                 values.append(entry)
                 self._file_combo["values"] = values
             self._file_var.set(entry)
+        # Initialiser les spinbox avec le crop du chapitre actif
+        if self._vf and self._vf.active_chapter:
+            ch0 = self._vf.chapters[0] if self._vf.chapters else None
+        self._update_crop_fields(ch0.crop_effective if ch0 else None)
+        if ch0:
+            self._seek_slider.set_position(ch0.timestamp_sec)
+        self._update_info_panels()
+        # Positionner le curseur seek au timestamp du 1er chapitre
+        if self._vf and self._vf.chapters:
+            self._seek_slider.set_position(self._vf.chapters[0].timestamp_sec)
+            self._seek_slider.set_active(0)
+        self._update_info_panels()
+
 
     def _on_status(self, evt: EVT.EvtStatus) -> None:
         if self._status_var:
@@ -350,6 +506,7 @@ class TkinterView(BaseView):
                 self._update_crop_fields(ch.crop_effective)
         if self._seek_slider:
             self._seek_slider.set_active(evt.index)
+        self._update_info_panels()
             
     def _on_chapters_updated(self, evt: EVT.EvtChaptersUpdated) -> None:
         if self._vf is None:
@@ -361,6 +518,8 @@ class TkinterView(BaseView):
             # Juste timestamp/durée modifiés → update label uniquement
             self._update_thumb_cell(evt.chapter_index)
         self._seek_slider.reset(self._vf.chapters, self._vf.total_duration_sec)
+        self._update_info_panels()
+
 
     def _on_crop_changed(self, evt: EVT.EvtCropChanged) -> None:
         if self._vf and evt.chapter_index == self._vf.active_index:
@@ -376,17 +535,40 @@ class TkinterView(BaseView):
         if self._canvas is None:
             return
         cw = self._canvas.winfo_width()
-        ch = self._canvas.winfo_height()
-        if cw <= 1 or ch <= 1:
+        ch_px = self._canvas.winfo_height()
+        if cw <= 1 or ch_px <= 1:
             return
-        img  = evt.image.resize((cw, ch))
-        photo = ImageTk.PhotoImage(img)
-        self._canvas_image = photo   # garder référence
+
+        from PIL import Image
+        img = evt.image
+        iw, ih = img.size
+
+        # Ratio-fit : scale max sans dépasser le canvas
+        scale = min(cw / iw, ch_px / ih)
+        nw    = max(1, int(iw * scale))
+        nh    = max(1, int(ih * scale))
+        try:
+            resample = Image.Resampling.LANCZOS
+        except AttributeError:
+            resample = getattr(Image, "LANCZOS", Image.BICUBIC)
+        img_fit = img.resize((nw, nh), resample)
+
+        # Letterbox sur fond noir
+        canvas_img = Image.new("RGB", (cw, ch_px), (0, 0, 0))
+        off_x = (cw - nw) // 2
+        off_y = (ch_px - nh) // 2
+        canvas_img.paste(img_fit, (off_x, off_y))
+
+        photo = ImageTk.PhotoImage(canvas_img)
+        self._canvas_image = photo
         self._canvas.delete("all")
         self._canvas.create_image(0, 0, anchor=tk.NW, image=photo)
-        # Mémoriser scale pour le drag
+
+        # Scale = rapport pixels vidéo natifs → pixels écran dans la zone image
         if self._vf and self._vf.video_w > 0:
-            self._canvas_scale = cw / self._vf.video_w
+            self._canvas_scale = nw / self._vf.video_w
+            # Mémoriser l'offset pour les hit-tests crop
+            self._canvas_offset = (off_x, off_y)
 
     def _on_thumb_ready(self, evt: EVT.EvtThumbReady) -> None:
         idx = evt.chapter_index
@@ -402,10 +584,19 @@ class TkinterView(BaseView):
         lbl.configure(image=photo)
 
     def _on_position_changed(self, evt: EVT.EvtPositionChanged) -> None:
+        self._current_ts_ui = evt.timestamp_sec
         if self._seek_slider:
             self._seek_slider.set_position(evt.timestamp_sec)
 
     # ── Thumb strip ────────────────────────────────────────────────────────
+
+    def _canvas_to_video(self, x: int, y: int) -> tuple[int, int]:
+        """Convertit coordonnées canvas → coordonnées image (corrige l'offset letterbox)."""
+        ox, oy = self._canvas_offset
+        s = self._canvas_scale
+        vx = int((x - ox) / s) if s > 0 else 0
+        vy = int((y - oy) / s) if s > 0 else 0
+        return vx, vy
 
     def _rebuild_thumb_strip(self) -> None:
         """Recrée tous les widgets (ajout/suppression de chapitre)."""
@@ -416,6 +607,7 @@ class TkinterView(BaseView):
         self._thumb_frames  = []
         self._thumb_images  = []
         self._thumb_labels  = []   # labels texte (timestamp + durée)
+    
         for i, ch in enumerate(self._vf.chapters):
             cell = tk.Frame(self._strip_frame, bg="#111", bd=1, relief=tk.RAISED)
             cell.pack(side=tk.LEFT, padx=2, pady=2)
@@ -423,6 +615,11 @@ class TkinterView(BaseView):
                                cursor="hand2")
             lbl_img.pack()
             lbl_img.bind("<Button-1>", lambda _, idx=i: self._on_thumb_click(idx))
+            lbl_img.bind("<Double-Button-1>",
+                         lambda _, idx=i: self._on_thumb_double_click(idx))
+            lbl_txt.bind("<Double-Button-1>",
+                         lambda _, idx=i: self._on_thumb_double_click(idx))
+
             lbl_txt = tk.Label(cell, text=self._chapter_label(ch),
                                bg="#111", fg=FG, font=FONT_LABEL)
             lbl_txt.pack()
@@ -436,11 +633,43 @@ class TkinterView(BaseView):
             return
         ch = self._vf.chapters[index]
         self._thumb_labels[index].configure(text=self._chapter_label(ch))
-
+    
+    def _on_thumb_double_click(self, index: int) -> None:
+        if self._vf is None or index >= len(self._vf.chapters):
+            return
+        ch = self._vf.chapters[index]
+        self._popup_edit(
+            title=f"Chapitre {index} — titre",
+            current=ch.title or "",
+            on_ok=lambda val: self._send(CMD.CmdEditChapter(
+                index=index,
+                title=val,
+                timestamp_sec=ch.timestamp_sec,
+                timestamp_raw=ch.timestamp_raw,
+                duration_sec=ch.duration_sec or 0,
+            )),
+        )
+    
     @staticmethod
     def _chapter_label(ch: "Chapter") -> str:
-        dur = f" {ch.duration_sec}s" if ch.duration_sec else ""
-        return f"{ch.timestamp_raw}{dur}"
+        def fmt_dur(sec: int) -> str:
+            if sec < 60:
+                return f"{sec}s"
+            m, s = divmod(sec, 60)
+            return f"{m}:{s:02d}"
+
+        def fmt_ts(sec: int) -> str:
+            h, rem = divmod(sec, 3600)
+            m, s   = divmod(rem, 60)
+            if h:
+                return f"{h}:{m:02d}:{s:02d}"
+            return f"{m}:{s:02d}"
+
+        ts  = fmt_ts(ch.timestamp_sec)
+        dur = fmt_dur(ch.duration_sec) if ch.duration_sec else "—"
+        title = ch.title or ""
+        line1 = f"{ts} - {dur}"
+        return f"{line1}\n{title}" if title else line1
         
     def _highlight_thumb(self, active_index: int) -> None:
         for i, lbl in enumerate(self._thumb_frames):
@@ -461,8 +690,10 @@ class TkinterView(BaseView):
         from video_processor.infra.renderer import Renderer
         handles = Renderer._handles(ch.crop_effective, self._canvas_scale)
         from video_processor.infra.renderer import Renderer, HANDLE_R
-        handles = Renderer._handles(ch.crop_effective, self._canvas_scale)
-        tol = max(HANDLE_R, int(HANDLE_R * self._canvas_scale)) + 4
+        ox, oy  = self._canvas_offset
+        handles = [(hx + ox, hy + oy)
+                   for hx, hy in Renderer._handles(ch.crop_effective, self._canvas_scale)]
+        tol = HANDLE_R + 5
         for i, (hx, hy) in enumerate(handles):
             if abs(event.x - hx) <= tol and abs(event.y - hy) <= tol:
                 self._drag_state = {
@@ -472,12 +703,13 @@ class TkinterView(BaseView):
                 }
                 return
         # Cherche move (clic dans le rectangle crop)
-        c    = ch.crop_effective
-        s    = self._canvas_scale
-        cx1  = int(c.pos_x * s)
-        cy1  = int(c.pos_y * s)
-        cx2  = cx1 + int(c.w * s)
-        cy2  = cy1 + int(c.h * s)
+        c       = ch.crop_effective
+        s       = self._canvas_scale
+        ox, oy  = self._canvas_offset
+        cx1     = int(c.pos_x * s) + ox
+        cy1     = int(c.pos_y * s) + oy
+        cx2     = cx1 + int(c.w * s)
+        cy2     = cy1 + int(c.h * s)
         if cx1 <= event.x <= cx2 and cy1 <= event.y <= cy2:
             self._drag_state = {
                 "mode": "move",
@@ -546,8 +778,10 @@ class TkinterView(BaseView):
             self._canvas.configure(cursor="crosshair")
             return
         from video_processor.infra.renderer import Renderer, HANDLE_R
-        handles = Renderer._handles(ch.crop_effective, self._canvas_scale)
-        tol = max(HANDLE_R, int(HANDLE_R * self._canvas_scale)) + 4
+        ox, oy  = self._canvas_offset
+        handles = [(hx + ox, hy + oy)
+                   for hx, hy in Renderer._handles(ch.crop_effective, self._canvas_scale)]
+        tol = HANDLE_R + 5
         for i, (hx, hy) in enumerate(handles):
             if abs(event.x - hx) <= tol and abs(event.y - hy) <= tol:
                 self._canvas.configure(cursor=HANDLE_CURSORS[i])
@@ -555,8 +789,9 @@ class TkinterView(BaseView):
         # Dans le rectangle crop → fleur (move)
         c   = ch.crop_effective
         s   = self._canvas_scale
-        cx1 = int(c.pos_x * s)
-        cy1 = int(c.pos_y * s)
+        
+        cx1 = int(c.pos_x * s) + ox
+        cy1 = int(c.pos_y * s) + oy
         cx2 = cx1 + int(c.w * s)
         cy2 = cy1 + int(c.h * s)
         if cx1 <= event.x <= cx2 and cy1 <= event.y <= cy2:
@@ -582,15 +817,27 @@ class TkinterView(BaseView):
 
     def _update_crop_fields(self, crop: Optional["CropZone"]) -> None:
         if crop is None:
+            for v in (self._var_w, self._var_h, self._var_x, self._var_y):
+                if v:
+                    v.set(0)
             return
-        if self._var_w:
-            self._var_w.set(crop.w)
-        if self._var_h:
-            self._var_h.set(crop.h)
-        if self._var_x:
-            self._var_x.set(crop.pos_x)
-        if self._var_y:
-            self._var_y.set(crop.pos_y)
+        if self._var_w: self._var_w.set(int(crop.w))
+        if self._var_h: self._var_h.set(int(crop.h))
+        if self._var_x: self._var_x.set(int(crop.pos_x))
+        if self._var_y: self._var_y.set(int(crop.pos_y))
+
+    @staticmethod
+    def _parse_duration(s: str) -> int:
+        """Parse 'mm:ss' ou 'Xs' ou entier → secondes."""
+        s = s.strip()
+        if s.endswith("s") and ":" not in s:
+            return int(s[:-1])
+        parts = s.split(":")
+        if len(parts) == 2:
+            return int(parts[0]) * 60 + int(parts[1])
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        return int(s)
 
     # ── Interactions ──────────────────────────────────────────────────────
 

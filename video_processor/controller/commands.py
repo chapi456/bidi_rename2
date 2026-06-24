@@ -29,7 +29,7 @@ class CmdJump:
 
 @dataclass(frozen=True)
 class CmdSeekAbs:
-    timestamp_sec: int
+    timestamp_sec: float = 0.0
 
 @dataclass(frozen=True)
 class CmdSeekDelta:
@@ -107,9 +107,9 @@ class CmdEditChapter:
 @dataclass(frozen=True)
 class CmdChapterEdge:
     index:         int
-    kind:          str   # "start" | "end"
-    timestamp_sec: int
-    duration_sec:  int
+    kind:          str
+    timestamp_sec: float = 0.0
+    duration_sec:  float = 0.0
 
 @dataclass(frozen=True)
 class CmdSave:

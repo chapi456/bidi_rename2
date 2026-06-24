@@ -50,7 +50,7 @@ class SessionController:
         self._vf:         Optional[VideoFile] = None
         self._handlers:   list[EventHandler]  = []
         self._lock        = threading.Lock()
-        self._current_ts: int                 = 0
+        self._current_ts: float = 0.0
 
     # ── Config interne ────────────────────────────────────────────────────
 
@@ -306,13 +306,13 @@ class SessionController:
         ).start()
         threading.Thread(target=self._preload_thumbs, daemon=True).start()
 
-    def _seek(self, ts: int) -> None:
+    def _seek(self, ts: float) -> None:
         assert self._vf is not None
-        self._current_ts = max(0, min(ts, self._vf.total_duration_sec))
-        idx = self._vf.chapter_at_time(self._current_ts)
+        self._current_ts = max(0.0, min(ts, float(self._vf.total_duration_sec)))
+        idx = self._vf.chapter_at_time(int(self._current_ts))
         self._emit(EVT.EvtPositionChanged(timestamp_sec=self._current_ts))
         threading.Thread(
-            target=self._load_frame, args=(idx, self._current_ts), daemon=True
+            target=self._load_frame, args=(idx, int(self._current_ts)), daemon=True
         ).start()
 
     # ── Handlers navigation ───────────────────────────────────────────────
@@ -326,7 +326,6 @@ class SessionController:
         if ch:
             self._current_ts = ch.timestamp_sec
         self._emit(EVT.EvtChapterChanged(index=cmd.chapter_index))
-        self._emit(EVT.EvtPositionChanged(timestamp_sec=self._current_ts))
         threading.Thread(
             target=self._load_frame, args=(cmd.chapter_index,), daemon=True
         ).start()
@@ -583,12 +582,40 @@ class SessionController:
 
     # ── Handlers session ──────────────────────────────────────────────────
 
-    def _on_save(self, cmd: CMD.CmdSave) -> None:
-        log.debug("BOUCHON _on_save()")
+    def _on_save(self, cmd=None) -> None:
         if not self._require_vf():
             return
-        self._emit(EVT.EvtStatus("BOUCHON _on_save() — non implémenté"))
-        self._emit(EVT.EvtDirty(is_dirty=False))
+        vf = self._vf
+        try:
+            self._write_output(vf)
+            self._emit(EVT.EvtDirty(is_dirty=False))
+            self._emit(EVT.EvtStatus(f"Sauvegardé : {vf.short_name}"))
+        except Exception as exc:
+            log.error("Erreur _on_save : %s", exc)
+            self._emit(EVT.EvtStatus(f"Erreur sauvegarde : {exc}"))
+
+    def _write_output(self, vf: "VideoFile") -> None:
+        """Construit le nouveau nom et renomme (ou écrit #toCut.txt)."""
+        from video_processor.infra.filename_builder import FilenameBuilder
+        new_name = FilenameBuilder.build(vf)
+        if vf.uses_tocut:
+            # Écrire le complément dans #toCut.txt
+            from video_processor.infra.tocut_rw import TocutFile
+            tocut_path = vf.physical_path.parent / "#toCut.txt"
+            tocut = TocutFile.load(tocut_path) if tocut_path.exists() else TocutFile({})
+            # Le complément = tout ce qui suit le short_name sans extension
+            stem_new   = new_name.rsplit(".", 1)[0]
+            stem_short = vf.short_name.rsplit(".", 1)[0]
+            complement = stem_new[len(stem_short):]
+            tocut.set(vf.short_name, complement)
+            tocut.save(tocut_path)
+            log.debug("_write_output : #toCut.txt mis à jour (%s → %s)", vf.short_name, complement)
+        else:
+            # Renommage physique
+            new_path = vf.physical_path.parent / new_name
+            if new_path != vf.physical_path:
+                vf.physical_path.rename(new_path)
+                log.debug("_write_output : renommé %s → %s", vf.short_name, new_name)
 
     def _on_save_and_next(self, cmd: CMD.CmdSaveAndNext) -> None:
         if not self._require_vf():

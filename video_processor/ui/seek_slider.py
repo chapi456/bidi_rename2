@@ -66,10 +66,12 @@ class SeekSlider(tk.Canvas):
         self._send       = send
         self._chapters:  list["Chapter"] = []
         self._total_sec: int             = 1
-        self._current_ts: int            = 0
+        self._current_ts: float = 0.0
         self._drag:      Optional[dict]  = None   # {kind, ch_index, ts_preview}
         self._hover_tag: Optional[str]   = None
         self._active_index: int          = 0
+
+        self._tooltip: Optional[int] = None   # id item canvas
 
         self.bind("<Configure>",       self._redraw)
         self.bind("<ButtonPress-1>",   self._on_press)
@@ -78,6 +80,7 @@ class SeekSlider(tk.Canvas):
         self.bind("<ButtonRelease-1>", self._on_release)
         self.bind("<Motion>",          self._on_hover)
         self.bind("<Leave>",           self._on_leave)
+        self.bind("<Motion>",          self._on_hover)
 
     # ── API publique ───────────────────────────────────────────────────────
 
@@ -126,32 +129,32 @@ class SeekSlider(tk.Canvas):
                 self.create_rectangle(xl, H_RULER, W, H,
                                       fill=COLOR_BG_SEEK, outline="")
 
-        # ── Ruler : segments + triangles ──────────────────────────────────
+        # ── Piste : durée live centrée sur le segment du chapitre draggué ──
         for i, ch in enumerate(self._chapters):
-            x1   = self._ts_to_x(ch.timestamp_sec, W)
-            x2   = self._chapter_end_x(i, W)
-            # Pas de couleur dans le ruler — triangles seulement
-            # Durée live dans le ruler si drag en cours sur CE chapitre
-            if self._drag and self._drag["ch_index"] == i:
-                label = self._segment_label(i)
-                if label and (x2 - x1) > 20:
-                    self.create_text(
-                        (x1 + x2) // 2, H_RULER // 2,
-                        text=label, fill=COLOR_DURATION,
-                        font=FONT_DUR, anchor=tk.CENTER,
-                    )
+            x1    = self._ts_to_x(ch.timestamp_sec, W)
+            x2    = self._chapter_end_x(i, W)
+            label = self._segment_label(i)
+            if label:
+                seg_w = x2 - x1
+                # Format court si < 60s
+                mid_x = x1 + seg_w // 2
+                mid_y = H_RULER + (H_SEEK // 2)
+                self.create_text(mid_x, mid_y, text=label,
+                                 fill=COLOR_DURATION, font=FONT_DUR,
+                                 anchor=tk.CENTER)
 
-            # Triangle borne start
+        # ── Curseur position courante : piste seulement ────────────────────
+        xc = self._ts_to_x(self._current_ts, W)
+        self.create_line(xc, H_RULER, xc, H,
+                         fill=COLOR_CURSOR, width=CURSOR_W, tags="cursor")
+
+        # ── Ruler : triangles uniquement ───────────────────────────────────
+        for i, ch in enumerate(self._chapters):
+            x1 = self._ts_to_x(ch.timestamp_sec, W)
+            x2 = self._chapter_end_x(i, W)
             self._draw_triangle(x1, f"hs_{i}", COLOR_HANDLE)
-
-            # Triangle borne end si duration explicite
             if ch.duration_sec:
                 self._draw_triangle(x2, f"he_{i}", COLOR_HANDLE)
-
-        # ── Curseur position courante (toute hauteur) ──────────────────────
-        xc = self._ts_to_x(self._current_ts, W)
-        self.create_line(xc, 0, xc, H,
-                         fill=COLOR_CURSOR, width=CURSOR_W, tags="cursor")
 
     def _draw_triangle(self, x: int, tag: str, color: str) -> None:
         """Triangle pointant vers le bas, base en haut du ruler."""
@@ -180,6 +183,8 @@ class SeekSlider(tk.Canvas):
 
     @staticmethod
     def _fmt_dur(sec: int) -> str:
+        if sec < 60:
+            return f"{sec}s"
         m, s = divmod(sec, 60)
         return f"{m}:{s:02d}"
 
@@ -189,10 +194,9 @@ class SeekSlider(tk.Canvas):
         """Retourne {kind, ch_index} si x est sur une poignée, None sinon."""
         W = self.winfo_width()
         for i, ch in enumerate(self._chapters):
-            if i > 0:
-                xs = self._ts_to_x(ch.timestamp_sec, W)
-                if abs(x - xs) <= HANDLE_TOL:
-                    return {"kind": "start", "ch_index": i}
+            xs = self._ts_to_x(ch.timestamp_sec, W)
+            if abs(x - xs) <= HANDLE_TOL:
+                return {"kind": "start", "ch_index": i}
             if ch.duration_sec:
                 xe = self._ts_to_x(ch.timestamp_sec + ch.duration_sec, W)
                 if abs(x - xe) <= HANDLE_TOL:
@@ -260,16 +264,29 @@ class SeekSlider(tk.Canvas):
         self._redraw()
 
     def _on_hover(self, event: tk.Event) -> None:
+        # Tooltip timestamp
+        if self._tooltip:
+            self.delete(self._tooltip)
+            self._tooltip = None
+        ts  = self._x_to_ts(event.x)
+        lbl = self._fmt_ts(int(ts))
+        W   = self.winfo_width()
+        tx  = min(event.x + 4, W - 40)
+        self._tooltip = self.create_text(
+            tx, 1, text=lbl, fill="#CCCCCC",
+            font=FONT_DUR, anchor=tk.NW,
+        )
+        # Curseur
         if event.y >= H_RULER:
             self.configure(cursor="crosshair")
             return
         h = self._find_handle(event.x)
-        if h:
-            self.configure(cursor="sb_h_double_arrow")
-        else:
-            self.configure(cursor="crosshair")
+        self.configure(cursor="sb_h_double_arrow" if h else "crosshair")
 
     def _on_leave(self, _event=None) -> None:
+        if self._tooltip:
+            self.delete(self._tooltip)
+            self._tooltip = None
         self.configure(cursor="crosshair")
 
     # ── Conversion coords ──────────────────────────────────────────────────
@@ -299,3 +316,9 @@ class SeekSlider(tk.Canvas):
         if i + 1 < len(self._chapters):
             return self._ts_to_x(self._chapters[i + 1].timestamp_sec, W)
         return W
+    
+    @staticmethod
+    def _fmt_ts(sec: int) -> str:
+        h, rem = divmod(sec, 3600)
+        m, s   = divmod(rem, 60)
+        return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"

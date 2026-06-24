@@ -90,7 +90,7 @@ class EvtFrameReady:
     image:         "PILImage"   # PIL.Image.Image au runtime
     crop:          Optional["CropZone"]
     inherited:     bool
-    timestamp_sec: int
+    timestamp_sec: float = 0.0
 
 @dataclass(frozen=True)
 class EvtThumbReady:
@@ -100,6 +100,3 @@ class EvtThumbReady:
     inherited:     bool
     
     
-@dataclass
-class EvtPositionChanged:
-    timestamp_sec: int
