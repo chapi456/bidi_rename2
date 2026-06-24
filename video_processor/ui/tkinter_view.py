@@ -218,10 +218,10 @@ class TkinterView(BaseView):
             row.pack(fill=tk.X, padx=6, pady=2)
             tk.Label(row, text=label, bg=BG_PANEL, fg=FG,
                      width=3).pack(side=tk.LEFT)
-            sp = tk.Spinbox(row, from_=0, to=9999, textvariable=var,
-                            width=6, command=self._on_crop_spinbox)
-            sp.bind("<Return>",    lambda _: self._on_crop_spinbox())
-            sp.bind("<FocusOut>",  lambda _: self._on_crop_spinbox())
+            sp = tk.Spinbox(row, from_=-9999, to=9999, textvariable=var,
+                            width=6, command=self._on_position_spinbox)
+            sp.bind("<Return>",   lambda _e: self._on_position_spinbox())
+            sp.bind("<FocusOut>", lambda _e: self._on_position_spinbox())
             sp.pack(side=tk.LEFT)
 
         ttk.Separator(panel, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
@@ -460,10 +460,11 @@ class TkinterView(BaseView):
             return
         from video_processor.infra.renderer import Renderer
         handles = Renderer._handles(ch.crop_effective, self._canvas_scale)
-        from video_processor.infra.renderer import HANDLE_R
-        # Cherche poignée touchée
+        from video_processor.infra.renderer import Renderer, HANDLE_R
+        handles = Renderer._handles(ch.crop_effective, self._canvas_scale)
+        tol = max(HANDLE_R, int(HANDLE_R * self._canvas_scale)) + 4
         for i, (hx, hy) in enumerate(handles):
-            if abs(event.x - hx) <= HANDLE_R + 2 and abs(event.y - hy) <= HANDLE_R + 2:
+            if abs(event.x - hx) <= tol and abs(event.y - hy) <= tol:
                 self._drag_state = {
                     "mode": "resize", "handle_idx": i,
                     "snap_x": event.x, "snap_y": event.y,
@@ -546,8 +547,9 @@ class TkinterView(BaseView):
             return
         from video_processor.infra.renderer import Renderer, HANDLE_R
         handles = Renderer._handles(ch.crop_effective, self._canvas_scale)
+        tol = max(HANDLE_R, int(HANDLE_R * self._canvas_scale)) + 4
         for i, (hx, hy) in enumerate(handles):
-            if abs(event.x - hx) <= HANDLE_R + 3 and abs(event.y - hy) <= HANDLE_R + 3:
+            if abs(event.x - hx) <= tol and abs(event.y - hy) <= tol:
                 self._canvas.configure(cursor=HANDLE_CURSORS[i])
                 return
         # Dans le rectangle crop → fleur (move)

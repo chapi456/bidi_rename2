@@ -25,8 +25,8 @@ if TYPE_CHECKING:
     from video_processor.domain.chapter import Chapter
 
 # ── Constantes visuelles ──────────────────────────────────────────────────────
-H_RULER  = 18   # hauteur ruler (segments colorés + triangles)
-H_SEEK   = 14   # hauteur piste seek (fond sombre)
+H_RULER  = 9   # hauteur ruler (segments colorés + triangles)
+H_SEEK   = 19   # hauteur piste seek (fond sombre)
 H        = H_RULER + H_SEEK
 
 CURSOR_W    = 2
@@ -108,35 +108,41 @@ class SeekSlider(tk.Canvas):
             return
 
         # ── Piste seek (bas) ──────────────────────────────────────────────
-        # Fond piste : segment actif en surbrillance
+
+        # Fond piste : bleu clair pour actif, orange pour les autres
         for i, ch in enumerate(self._chapters):
             x1    = self._ts_to_x(ch.timestamp_sec, W)
             x2    = self._chapter_end_x(i, W)
-            color = COLOR_ACTIVE_SEG if i == self._active_index else COLOR_BG_SEEK
+            color = "#1A4A7A" if i == self._active_index else "#5A3010"
             self.create_rectangle(x1, H_RULER, x2, H, fill=color, outline="")
+        # Zones hors chapitres (avant ch[0] et après dernier)
+        if self._chapters:
+            x0 = self._ts_to_x(self._chapters[0].timestamp_sec, W)
+            if x0 > 0:
+                self.create_rectangle(0, H_RULER, x0, H,
+                                      fill=COLOR_BG_SEEK, outline="")
+            xl = self._chapter_end_x(len(self._chapters) - 1, W)
+            if xl < W:
+                self.create_rectangle(xl, H_RULER, W, H,
+                                      fill=COLOR_BG_SEEK, outline="")
 
         # ── Ruler : segments + triangles ──────────────────────────────────
         for i, ch in enumerate(self._chapters):
             x1   = self._ts_to_x(ch.timestamp_sec, W)
             x2   = self._chapter_end_x(i, W)
-            color = COLORS[i % len(COLORS)]
+            # Pas de couleur dans le ruler — triangles seulement
+            # Durée live dans le ruler si drag en cours sur CE chapitre
+            if self._drag and self._drag["ch_index"] == i:
+                label = self._segment_label(i)
+                if label and (x2 - x1) > 20:
+                    self.create_text(
+                        (x1 + x2) // 2, H_RULER // 2,
+                        text=label, fill=COLOR_DURATION,
+                        font=FONT_DUR, anchor=tk.CENTER,
+                    )
 
-            # Segment coloré dans le ruler
-            self.create_rectangle(x1, 0, x2, H_RULER,
-                                  fill=color, outline="")
-
-            # Durée pendant drag, ou label court sinon
-            label = self._segment_label(i)
-            if label and (x2 - x1) > 20:
-                self.create_text(
-                    (x1 + x2) // 2, H_RULER // 2,
-                    text=label, fill=COLOR_DURATION,
-                    font=FONT_DUR, anchor=tk.CENTER,
-                )
-
-            # Triangle borne start (sauf ch[0])
-            if i > 0:
-                self._draw_triangle(x1, f"hs_{i}", COLOR_HANDLE)
+            # Triangle borne start
+            self._draw_triangle(x1, f"hs_{i}", COLOR_HANDLE)
 
             # Triangle borne end si duration explicite
             if ch.duration_sec:
@@ -230,9 +236,12 @@ class SeekSlider(tk.Canvas):
     def _on_drag(self, event: tk.Event) -> None:
         if self._drag is None:
             return
+        from video_processor.controller import commands as CMD
         ts = self._x_to_ts(event.x)
         self._drag["ts_preview"] = ts
         self._redraw()
+        # Preview live : charge la frame à la position draguée
+        self._send(CMD.CmdSeekAbs(timestamp_sec=ts))
 
     def _on_release(self, event: tk.Event) -> None:
         from video_processor.controller import commands as CMD

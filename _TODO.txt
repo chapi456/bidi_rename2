@@ -24,6 +24,13 @@ Mis à jour : 2026-06-24
 [BUG-07] Highlight chapitre actif dans ruler au lieu de la piste seek
          FIX : fond ACCENT dans zone piste [H_RULER..H] pour chapitre actif
 
+[BUG-08] Alignement curseurs souris / poignées crop : tolérance en px image
+         au lieu de px écran → CORRIGÉ ci-dessus (tol = HANDLE_R * scale + 4)
+
+[BUG-09] Spinbox W/H/X/Y : <Return>/<FocusOut> manquants → CORRIGÉ
+
+[BUG-10] Live drag ancre chapitre : triangle bouge mais frame principale
+         pas mise à jour → CORRIGÉ (CmdSeekAbs pendant _on_drag)
 ## AMÉLIORATIONS EN ATTENTE
 [TODO-05] Thumbnail refresh après drag crop (CmdRefreshThumb)
 [TODO-06] EvtChaptersUpdated : full_rebuild + chapter_index
@@ -35,3 +42,5 @@ Mis à jour : 2026-06-24
 [TODO-12] SeekSlider tooltip timestamp au survol
 [TODO-13] Combobox fichier : tous les fichiers de session
 [TODO-14] Double-clic thumbnail → popup édition (= TODO4)
+[TODO-15] Drag crop resize : crop0 figé au press → relire crop_effective
+          à chaque motion (patch _on_mouse_move fourni, non encore appliqué)
