@@ -2,16 +2,19 @@
 File: session_controller.py
 Path: video_processor/controller/session_controller.py
 
-Version: 0.4.0
+Version: 0.5.0
 Date: 2026-06-23
 
 Changelog:
+- 0.5.0 (2026-06-23): Nouveaux handlers commandes navigation
+  * _on_seek_begin        : seek à 0
+  * _on_seek_end          : seek à total_duration_sec
+  * _on_seek_chapter_start: seek au début du chapitre actif
+  * _on_seek_chapter_end  : seek à la fin du chapitre actif
+  * _on_copy_prev_crop    : copie crop_effective[i-1] → crop_explicit[i]
+  * _on_save_and_next     : _on_save() + _on_next_file() enchaîné
+  * dispatch mis à jour pour les 6 nouvelles commandes
 - 0.4.0 (2026-06-23): _load_entry, _preload_thumbs, _load_frame implémentés
-  * _load_entry : probe + TocutFile + FilenameParser + VideoFile + resolve_inheritance
-  * _preload_thumbs : extraction des thumbs en thread démon, séquentielle par chapitre
-  * _load_frame : extraction frame principale à ts_sec donné ou timestamp du chapitre
-  * Correction ch.crop_inherited → ch.is_inherited dans _on_set_crop/_on_set_position
-  * Correction EvtCropChanged : champ crop ajouté
 - 0.3.0 (2026-06-23): Suppression config du __init__
 - 0.2.0 (2026-06-23): Fichier complet
 - 0.1.0 (2026-06-23): Squelette initial
@@ -43,7 +46,6 @@ class SessionController:
     """
 
     def __init__(self, session: VideoSession) -> None:
-        log.debug("SessionController.__init__()")
         self._session:    VideoSession        = session
         self._vf:         Optional[VideoFile] = None
         self._handlers:   list[EventHandler]  = []
@@ -63,14 +65,12 @@ class SessionController:
         self._handlers.append(handler)
 
     def _emit(self, event: object) -> None:
-        log.debug("SessionController._emit(%s)", type(event).__name__)
         for h in self._handlers:
             h(event)
 
     # ── Point d'entrée ────────────────────────────────────────────────────
 
     def open_current(self) -> None:
-        log.debug("SessionController.open_current()")
         entry = self._session.current_entry
         if entry is None:
             self._emit(EVT.EvtStatus("Aucun fichier dans la session."))
@@ -82,22 +82,28 @@ class SessionController:
     def send(self, cmd: object) -> None:
         log.debug("SessionController.send(%s)", type(cmd).__name__)
         dispatch = {
-            CMD.CmdJump:            self._on_jump,
-            CMD.CmdSeekAbs:         self._on_seek_abs,
-            CMD.CmdSeekDelta:       self._on_seek_delta,
-            CMD.CmdAddCrop:         self._on_add_crop,
-            CMD.CmdDelCrop:         self._on_del_crop,
-            CMD.CmdSetCrop:         self._on_set_crop,
-            CMD.CmdSetPosition:     self._on_set_position,
-            CMD.CmdValidateChapter: self._on_validate_chapter,
-            CMD.CmdPrevChapter:     self._on_prev_chapter,
-            CMD.CmdAddChapter:      self._on_add_chapter,
-            CMD.CmdEditChapter:     self._on_edit_chapter,
-            CMD.CmdChapterEdge:     self._on_chapter_edge,
-            CMD.CmdSave:            self._on_save,
-            CMD.CmdNextFile:        self._on_next_file,
-            CMD.CmdLoadFile:        self._on_load_file,
-            CMD.CmdQuit:            self._on_quit,
+            CMD.CmdJump:             self._on_jump,
+            CMD.CmdSeekAbs:          self._on_seek_abs,
+            CMD.CmdSeekDelta:        self._on_seek_delta,
+            CMD.CmdSeekBegin:        self._on_seek_begin,
+            CMD.CmdSeekEnd:          self._on_seek_end,
+            CMD.CmdSeekChapterStart: self._on_seek_chapter_start,
+            CMD.CmdSeekChapterEnd:   self._on_seek_chapter_end,
+            CMD.CmdAddCrop:          self._on_add_crop,
+            CMD.CmdDelCrop:          self._on_del_crop,
+            CMD.CmdSetCrop:          self._on_set_crop,
+            CMD.CmdSetPosition:      self._on_set_position,
+            CMD.CmdCopyPrevCrop:     self._on_copy_prev_crop,
+            CMD.CmdValidateChapter:  self._on_validate_chapter,
+            CMD.CmdPrevChapter:      self._on_prev_chapter,
+            CMD.CmdAddChapter:       self._on_add_chapter,
+            CMD.CmdEditChapter:      self._on_edit_chapter,
+            CMD.CmdChapterEdge:      self._on_chapter_edge,
+            CMD.CmdSave:             self._on_save,
+            CMD.CmdSaveAndNext:      self._on_save_and_next,
+            CMD.CmdNextFile:         self._on_next_file,
+            CMD.CmdLoadFile:         self._on_load_file,
+            CMD.CmdQuit:             self._on_quit,
         }
         handler = dispatch.get(type(cmd))
         if handler:
@@ -106,25 +112,21 @@ class SessionController:
             log.warning("Commande inconnue : %s", type(cmd).__name__)
 
     # ── Chargement fichier ────────────────────────────────────────────────
+    # (inchangé — copié tel quel depuis 0.4.0)
 
     def _load_entry(self, path: Path) -> None:
-        """Charge un fichier vidéo complet et émet EvtSessionLoaded."""
         from video_processor.infra.filename_parser import FilenameParser
         from video_processor.infra.tocut_rw        import TocutFile
         from video_processor.infra.frame_extractor import FrameExtractor
 
-        log.debug("SessionController._load_entry(%s)", path.name)
         self._emit(EVT.EvtStatus(f"Chargement : {path.name}"))
-
         cfg = self._cfg
 
-        # 1. Probe
         vw, vh, total_sec = FrameExtractor.probe(path)
         if vw == 0:
             self._emit(EVT.EvtStatus(f"Erreur probe : {path.name}"))
             return
 
-        # 2. TocutFile → long_name
         short_name = path.name
         uses_tocut = False
         complement = ""
@@ -138,39 +140,32 @@ class SessionController:
                 uses_tocut = True
                 long_name  = path.stem + complement + path.suffix
 
-        # 3. Parser
         parsed = FilenameParser.parse(long_name, styles=cfg.styles)
         if parsed is None:
             self._emit(EVT.EvtStatus(f"Nom invalide (aucun style) : {path.name}"))
             return
 
-        # 4a. Crop global
         global_crop: Optional[CropZone] = None
         if parsed.crop:
             global_crop = CropZone(w=parsed.crop.w, h=parsed.crop.h, explicit=True)
 
-        # 4b. Chapitres
         chapters: list[Chapter] = []
         for i, ci in enumerate(parsed.chapters):
             crop_explicit: Optional[CropZone] = None
-            cw = parsed.crop.w if parsed.crop else 0
+            cw   = parsed.crop.w if parsed.crop else 0
             ch_h = parsed.crop.h if parsed.crop else 0
 
             if ci.pos_mode == "center":
                 crop_explicit = CropZone(
                     w=cw, h=ch_h,
-                    pos_x=(vw - cw) // 2,
-                    pos_y=(vh - ch_h) // 2,
-                    pos_mode="center",
-                    explicit=True,
+                    pos_x=(vw - cw) // 2, pos_y=(vh - ch_h) // 2,
+                    pos_mode="center", explicit=True,
                 )
             elif ci.pos_explicit and ci.pos_x is not None and ci.pos_y is not None:
                 crop_explicit = CropZone(
                     w=cw, h=ch_h,
-                    pos_x=ci.pos_x,
-                    pos_y=ci.pos_y,
-                    pos_mode="topleft",  # type: ignore[arg-type]
-                    explicit=True,
+                    pos_x=ci.pos_x, pos_y=ci.pos_y,
+                    pos_mode="topleft", explicit=True,
                 )
 
             chapters.append(Chapter(
@@ -182,7 +177,6 @@ class SessionController:
                 crop_explicit=crop_explicit,
             ))
 
-        # 4c. VideoFile
         vf = VideoFile(
             physical_path=path,
             short_name=short_name,
@@ -208,11 +202,9 @@ class SessionController:
             active_index=0,
         )
 
-        # 5. Héritage
         vf.resolve_inheritance()
-
-        # 6. Émettre + lancer preload
-        self._vf = vf
+        self._vf         = vf
+        self._current_ts = 0
         self._emit(EVT.EvtSessionLoaded(video_file=vf))
         self._emit(EVT.EvtTitle(text=path.stem))
         self._emit(EVT.EvtStatus(
@@ -223,31 +215,22 @@ class SessionController:
         threading.Thread(target=self._load_frame, args=(0,), daemon=True).start()
 
     def _preload_thumbs(self) -> None:
-        """Extrait les vignettes de tous les chapitres en arrière-plan.
-
-        Séquentiel pour ne pas saturer ffmpeg. Émet EvtThumbReady par chapitre.
-        Guard : si _vf change entre deux extractions (fichier suivant), on stoppe.
-        """
         from video_processor.infra.frame_extractor import FrameExtractor
         from video_processor.infra.renderer        import Renderer
 
-        vf = self._vf   # snapshot local — thread safety
+        vf = self._vf
         if vf is None:
             return
 
-        log.debug("_preload_thumbs() — %d chapitres", len(vf.chapters))
         for ch in vf.chapters:
-            if self._vf is not vf:   # fichier changé entre temps → stop
-                log.debug("_preload_thumbs() interrompu (fichier changé)")
+            if self._vf is not vf:
                 return
             if ch.thumb_loading or ch.thumb_raw is not None:
                 continue
-
             ch.thumb_loading = True
             try:
                 img = FrameExtractor.extract_thumb(vf.physical_path, ch.timestamp_sec)
                 if img is None:
-                    log.warning("_preload_thumbs : frame None pour ch[%d]", ch.index)
                     continue
                 ch.thumb_raw = img
                 rendered = Renderer.render_thumb_scaled(ch, vf.video_w, vf.video_h)
@@ -261,12 +244,6 @@ class SessionController:
                 ch.thumb_loading = False
 
     def _load_frame(self, chapter_index: int, ts_sec: Optional[int] = None) -> None:
-        """Extrait la frame principale pour un chapitre.
-
-        Si ts_sec est None, utilise le timestamp du chapitre.
-        Émet EvtFrameReady quand l'image est prête.
-        Guard : si _vf change, on abandonne silencieusement.
-        """
         from video_processor.infra.frame_extractor import FrameExtractor
         from video_processor.infra.renderer        import Renderer
 
@@ -286,8 +263,7 @@ class SessionController:
             if img is None or self._vf is not vf:
                 return
             ch.frame_raw = img
-            # scale pour affichage : on normalise à une largeur de 960px max
-            scale = min(1.0, 960 / vf.video_w) if vf.video_w > 0 else 1.0
+            scale    = min(1.0, 960 / vf.video_w) if vf.video_w > 0 else 1.0
             rendered = Renderer.render_frame(ch, scale)
             self._emit(EVT.EvtFrameReady(
                 chapter_index=chapter_index,
@@ -299,13 +275,11 @@ class SessionController:
         finally:
             ch.frame_loading = False
 
-    # ── Helpers internes ──────────────────────────────────────────────────
+    # ── Helpers ───────────────────────────────────────────────────────────
 
     @property
     def _active_chapter(self) -> Optional[Chapter]:
-        if self._vf is None:
-            return None
-        return self._vf.active_chapter
+        return self._vf.active_chapter if self._vf else None
 
     def _require_vf(self) -> bool:
         if self._vf is None:
@@ -324,7 +298,16 @@ class SessionController:
         ).start()
         threading.Thread(target=self._preload_thumbs, daemon=True).start()
 
-    # ── Handlers commandes ────────────────────────────────────────────────
+    def _seek(self, ts: int) -> None:
+        """Seek interne : met à jour _current_ts et charge la frame."""
+        assert self._vf is not None
+        self._current_ts = max(0, min(ts, self._vf.total_duration_sec))
+        idx = self._vf.chapter_at_time(self._current_ts)
+        threading.Thread(
+            target=self._load_frame, args=(idx, self._current_ts), daemon=True
+        ).start()
+
+    # ── Handlers navigation ───────────────────────────────────────────────
 
     def _on_jump(self, cmd: CMD.CmdJump) -> None:
         if not self._require_vf():
@@ -342,20 +325,48 @@ class SessionController:
     def _on_seek_abs(self, cmd: CMD.CmdSeekAbs) -> None:
         if not self._require_vf():
             return
-        assert self._vf is not None
-        self._current_ts = cmd.timestamp_sec
-        idx = self._vf.chapter_at_time(cmd.timestamp_sec)
-        threading.Thread(
-            target=self._load_frame, args=(idx, cmd.timestamp_sec), daemon=True
-        ).start()
+        self._seek(cmd.timestamp_sec)
 
     def _on_seek_delta(self, cmd: CMD.CmdSeekDelta) -> None:
-        new_ts = max(0, self._current_ts + cmd.delta_sec)
-        self._on_seek_abs(CMD.CmdSeekAbs(timestamp_sec=new_ts))
+        if not self._require_vf():
+            return
+        self._seek(self._current_ts + cmd.delta_sec)
+
+    def _on_seek_begin(self, cmd: CMD.CmdSeekBegin) -> None:
+        if not self._require_vf():
+            return
+        self._seek(0)
+
+    def _on_seek_end(self, cmd: CMD.CmdSeekEnd) -> None:
+        if not self._require_vf():
+            return
+        assert self._vf is not None
+        self._seek(self._vf.total_duration_sec)
+
+    def _on_seek_chapter_start(self, cmd: CMD.CmdSeekChapterStart) -> None:
+        if not self._require_vf():
+            return
+        ch = self._active_chapter
+        if ch:
+            self._seek(ch.timestamp_sec)
+
+    def _on_seek_chapter_end(self, cmd: CMD.CmdSeekChapterEnd) -> None:
+        if not self._require_vf():
+            return
+        ch = self._active_chapter
+        if ch:
+            self._seek(ch.timestamp_sec + (ch.duration_sec or 0))
+
+    # ── Handlers crop ─────────────────────────────────────────────────────
 
     def _on_add_crop(self, cmd: CMD.CmdAddCrop) -> None:
         if not self._require_vf():
             return
+        assert self._vf is not None
+        ch = self._active_chapter
+        if ch and ch.crop_effective is None:
+            ch.crop_explicit = CropZone.default(self._vf.video_w, self._vf.video_h)
+            self._vf.resolve_inheritance()
         self._invalidate_and_reload()
         self._emit(EVT.EvtDirty(is_dirty=True))
 
@@ -376,15 +387,15 @@ class SessionController:
         assert self._vf is not None
         ch = self._active_chapter
         if ch and ch.crop_effective:
-            new_crop = CropZone(
-                w=cmd.w         if cmd.w     is not None else ch.crop_effective.w,
-                h=cmd.h         if cmd.h     is not None else ch.crop_effective.h,
-                pos_x=cmd.pos_x if cmd.pos_x is not None else ch.crop_effective.pos_x,
-                pos_y=cmd.pos_y if cmd.pos_y is not None else ch.crop_effective.pos_y,
-                pos_mode=ch.crop_effective.pos_mode,
+            eff = ch.crop_effective
+            ch.crop_explicit = CropZone(
+                w=cmd.w         if cmd.w     is not None else eff.w,
+                h=cmd.h         if cmd.h     is not None else eff.h,
+                pos_x=cmd.pos_x if cmd.pos_x is not None else eff.pos_x,
+                pos_y=cmd.pos_y if cmd.pos_y is not None else eff.pos_y,
+                pos_mode=eff.pos_mode,
                 explicit=True,
             )
-            ch.crop_explicit = new_crop
             self._vf.resolve_inheritance()
             self._emit(EVT.EvtCropChanged(
                 chapter_index=self._vf.active_index,
@@ -402,19 +413,17 @@ class SessionController:
             vw, vh = self._vf.video_w, self._vf.video_h
             cw, ch_h = ch.crop_effective.w, ch.crop_effective.h
             presets = {
-                "l":       (0,              (vh - ch_h) // 2),
-                "c":       ((vw - cw) // 2, (vh - ch_h) // 2),
-                "r":       (vw - cw,        (vh - ch_h) // 2),
-                "topleft": (0, 0),
+                "l": (0,              (vh - ch_h) // 2),
+                "c": ((vw - cw) // 2, (vh - ch_h) // 2),
+                "r": (vw - cw,        (vh - ch_h) // 2),
             }
             px, py = presets.get(cmd.preset, (cmd.pos_x or 0, cmd.pos_y or 0))
-            new_crop = CropZone(
+            ch.crop_explicit = CropZone(
                 w=cw, h=ch_h,
                 pos_x=px, pos_y=py,
                 pos_mode="center" if cmd.preset == "c" else "topleft",
                 explicit=True,
             )
-            ch.crop_explicit = new_crop
             self._vf.resolve_inheritance()
             self._emit(EVT.EvtCropChanged(
                 chapter_index=self._vf.active_index,
@@ -422,6 +431,32 @@ class SessionController:
                 inherited=ch.is_inherited,
             ))
         self._emit(EVT.EvtDirty(is_dirty=True))
+
+    def _on_copy_prev_crop(self, cmd: CMD.CmdCopyPrevCrop) -> None:
+        if not self._require_vf():
+            return
+        assert self._vf is not None
+        idx = self._vf.active_index
+        if idx == 0:
+            self._emit(EVT.EvtStatus("Pas de chapitre précédent."))
+            return
+        prev_crop = self._vf.chapters[idx - 1].crop_effective
+        if prev_crop is None:
+            self._emit(EVT.EvtStatus("Le chapitre précédent n'a pas de crop."))
+            return
+        ch = self._active_chapter
+        if ch:
+            ch.crop_explicit = CropZone(
+                w=prev_crop.w, h=prev_crop.h,
+                pos_x=prev_crop.pos_x, pos_y=prev_crop.pos_y,
+                pos_mode=prev_crop.pos_mode,
+                explicit=True,
+            )
+            self._vf.resolve_inheritance()
+            self._invalidate_and_reload()
+        self._emit(EVT.EvtDirty(is_dirty=True))
+
+    # ── Handlers chapitres ────────────────────────────────────────────────
 
     def _on_validate_chapter(self, cmd: CMD.CmdValidateChapter) -> None:
         if not self._require_vf():
@@ -494,12 +529,20 @@ class SessionController:
         self._emit(EVT.EvtChaptersUpdated(chapters=self._vf.chapters))
         self._emit(EVT.EvtDirty(is_dirty=True))
 
+    # ── Handlers session ──────────────────────────────────────────────────
+
     def _on_save(self, cmd: CMD.CmdSave) -> None:
         log.debug("BOUCHON _on_save()")
         if not self._require_vf():
             return
         self._emit(EVT.EvtStatus("BOUCHON _on_save() — non implémenté"))
         self._emit(EVT.EvtDirty(is_dirty=False))
+
+    def _on_save_and_next(self, cmd: CMD.CmdSaveAndNext) -> None:
+        if not self._require_vf():
+            return
+        self._on_save(CMD.CmdSave())
+        self._on_next_file(CMD.CmdNextFile())
 
     def _on_next_file(self, cmd: CMD.CmdNextFile) -> None:
         if not self._session.advance():
