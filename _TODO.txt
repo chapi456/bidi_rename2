@@ -93,3 +93,21 @@ Légende : [✓] corrigé/implémenté  [~] partiel  [ ] à faire  [?] à vérif
 4. [TODO-17]  Popup édition chapitre (titre + timestamp + durée)
 
 5. [TODO-20]  Tests unitaires prioritaires
+
+
+[~][BUG-16] Spinbox W/H non fonctionnels
+         Code en place, mais non validé en test réel
+         Les logs fournis montrent surtout des CmdSetCrop de déplacement (pos_x/pos_y)
+         → à requalifier après correction du mode resize par poignée
+
+[ ][BUG-27b] Resize crop : poignée détectée au survol mais non capturée au clic
+         Symptôme : curseur resize OK, drag => move au lieu de resize
+         Cause probable : _on_mouse_press redétecte la poignée puis retombe dans move
+         Fix : mémoriser hover_handle_idx et verrouiller le mode resize au clic
+
+[✓][TODO-19] Save / Save+Next
+         _on_save() implémenté ; rename physique ou MAJ #toCut.txt selon uses_tocut
+
+[~][TODO-CUT] Découpe vidéo réelle
+         Non trouvée dans le code relu
+         Aujourd’hui : métadonnées chapitres + #toCut.txt, pas d’export vidéo

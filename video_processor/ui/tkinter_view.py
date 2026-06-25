@@ -98,6 +98,7 @@ class TkinterView(BaseView):
         self._var_y:   Optional[tk.IntVar] = None
         
         self._current_ts_ui: float = 0.0
+        self._hover_handle_idx: Optional[int] = None
 
     # ── Liaison contrôleur ─────────────────────────────────────────────────
 
@@ -693,17 +694,15 @@ class TkinterView(BaseView):
         handles = Renderer._handles(ch.crop_effective, self._canvas_scale)
         from video_processor.infra.renderer import Renderer, HANDLE_R
         ox, oy  = self._canvas_offset
-        handles = [(hx + ox, hy + oy)
-                   for hx, hy in Renderer._handles(ch.crop_effective, self._canvas_scale)]
-        tol = HANDLE_R + 5
-        for i, (hx, hy) in enumerate(handles):
-            if abs(event.x - hx) <= tol and abs(event.y - hy) <= tol:
-                self._drag_state = {
-                    "mode": "resize", "handle_idx": i,
-                    "snap_x": event.x, "snap_y": event.y,
-                    "crop0": ch.crop_effective,
-                }
-                return
+        if self._hover_handle_idx is not None:
+            self._drag_state = {
+                "mode": "resize",
+                "handle_idx": self._hover_handle_idx,
+                "snap_x": event.x,
+                "snap_y": event.y,
+                "crop0": ch.crop_effective,
+            }
+            return
         # Cherche move (clic dans le rectangle crop)
         c       = ch.crop_effective
         s       = self._canvas_scale
@@ -784,8 +783,10 @@ class TkinterView(BaseView):
         handles = [(hx + ox, hy + oy)
                    for hx, hy in Renderer._handles(ch.crop_effective, self._canvas_scale)]
         tol = HANDLE_R + 5
+        self._hover_handle_idx = None
         for i, (hx, hy) in enumerate(handles):
             if abs(event.x - hx) <= tol and abs(event.y - hy) <= tol:
+                self._hover_handle_idx = i
                 self._canvas.configure(cursor=HANDLE_CURSORS[i])
                 return
         # Dans le rectangle crop → fleur (move)
@@ -800,6 +801,7 @@ class TkinterView(BaseView):
             self._canvas.configure(cursor="fleur")
         else:
             self._canvas.configure(cursor="crosshair")
+            self._hover_handle_idx = None
 
     # ── Spinbox crop ──────────────────────────────────────────────────────
 
