@@ -1,62 +1,8 @@
 _TODO.txt — bidi_rename2
 ========================
-Mis à jour : 2026-06-24 (session soir)
+Mis à jour : 2026-06-25 (session soir)
 
 Légende : [✓] corrigé/implémenté  [~] partiel  [ ] à faire  [?] à vérifier
-
-═══════════════════════════════════════════════════
-## BUGS — À VÉRIFIER (patches fournis, pas encore commités)
-═══════════════════════════════════════════════════
-
-[?][BUG-08] Curseurs souris / poignées crop mal alignées
-         Patch : tol = HANDLE_R + 5, handles décalés de (ox, oy) letterbox
-         Fichier : tkinter_view.py → _on_mouse_press / _on_mouse_hover
-
-[?][BUG-11] Curseur seek dessiné dans ruler au lieu de la piste
-         Patch : create_line(xc, H_RULER, xc, H) au lieu de (xc, 0, xc, H)
-         Fichier : seek_slider.py → _redraw
-
-[?][BUG-12] Durée chapitre dans ruler gêne les ancres
-         Patch : déplacer label dans la piste, centré verticalement
-         Fichier : seek_slider.py → _redraw
-
-[?][BUG-13] ch[0] sans ancre start (triangle manquant)
-         Patch : supprimer `if i > 0:` dans _find_handle et _redraw
-         Fichier : seek_slider.py → _find_handle + _redraw
-
-[?][BUG-14] Spinbox X/Y initialisés à 0 malgré crop center
-         Patch : appeler _update_crop_fields dans _on_session_loaded
-         Fichier : tkinter_view.py → _on_session_loaded
-
-[?][BUG-15] Spinbox flèches ▲▼ remettent X/Y à 0 en mode center
-         Patch : forcer .set(int(v)) dans _update_crop_fields à chaque evt
-         Fichier : tkinter_view.py → _update_crop_fields
-
-[?][BUG-16] Spinbox W/H crop non fonctionnels (appelaient _on_position_spinbox)
-         Patch : binder sur _on_crop_spinbox + from_=1
-         Fichier : tkinter_view.py → _build_left_panel
-
-[?][BUG-17] Curseur seek non positionné au timestamp ch[0] à l'ouverture
-         Patch : seek_slider.set_position(ch0.timestamp_sec) dans _on_session_loaded
-         Fichier : tkinter_view.py → _on_session_loaded
-
-[?][BUG-18] Image canvas déformée (resize ignorait le ratio)
-         Patch : letterbox ratio-fit + fond noir + offset mémorisé
-         Fichier : tkinter_view.py → _on_frame_ready
-
-[✓][BUG-21] timestamp_sec: float dans CmdSeekAbs + _current_ts: float
-
-[?][BUG-22] Hit-tests crop ignoraient offset letterbox
-         Patch : handles = [(hx+ox, hy+oy) ...], cx1 += ox
-         Fichier : tkinter_view.py → _on_mouse_press / _on_mouse_hover
-
-[?][BUG-23] Infos panels non rafraîchis au drag ancre chapitre
-         Patch : _update_info_panels() dans _on_chapters_updated
-         Fichier : tkinter_view.py → _on_chapters_updated
-
-[?][BUG-24] Ordre panneau fichier incorrect
-         Patch : Studio / Acteur(s) / Date / Style(s) / Titre
-         Fichier : tkinter_view.py → _build_left_panel
 
 ═══════════════════════════════════════════════════
 ## BUGS — CONFIRMÉS ET COMMITÉS
@@ -69,40 +15,71 @@ Légende : [✓] corrigé/implémenté  [~] partiel  [ ] à faire  [?] à vérif
 [✓][BUG-05] Clic seekbar n'activait pas le chapitre → CmdJump dans _on_press
 [✓][BUG-06] Preset G/C/D sans mise à jour canvas → EvtCropChanged + re-render
 [✓][BUG-07] Highlight dans ruler au lieu piste → fond coloré dans [H_RULER..H]
+[✓][BUG-08] Curseurs souris / poignées crop mal alignées
+         tol = HANDLE_R + 5, handles décalés de (ox, oy) letterbox
 [✓][BUG-09] Spinbox <Return>/<FocusOut> manquants → bindés
 [✓][BUG-10] Drag ancre : frame principale pas rechargée → CmdSeekAbs dans _on_drag
+[✓][BUG-11] Curseur seek dessiné dans ruler → corrigé seek_slider.py
+[✓][BUG-12] Durée chapitre dans ruler → déplacé dans piste seek_slider.py
+[✓][BUG-13] ch[0] sans ancre start → if i > 0 supprimé seek_slider.py + _find_handle
+[✓][BUG-14] Spinbox X/Y init à 0 malgré crop center → _update_crop_fields au load
+[✓][BUG-15] Spinbox flèches ▲▼ remettent X/Y à 0 → forcé .set() dans _update_crop_fields
+[✓][BUG-16] Spinbox W/H non fonctionnels → binder sur _on_crop_spinbox + from_=1
+[✓][BUG-17] Curseur seek non positionné à l'ouverture → seek_slider.set_position(ch0)
+[✓][BUG-18] Image canvas déformée → letterbox ratio-fit + offset mémorisé
+[✓][BUG-21] timestamp_sec: float dans CmdSeekAbs + _current_ts: float
+[✓][BUG-22] Hit-tests crop ignoraient offset letterbox → handles avec (ox, oy)
+[✓][BUG-23] Infos panels non rafraîchis → _update_info_panels() dans _on_chapters_updated
+[✓][BUG-24] Ordre panneau fichier incorrect → Studio/Acteur(s)/Date/Style(s)/Titre
+[✓][BUG-25] crash _rebuild_thumb_strip : lbl_txt bindé avant d'être créé
+         → déplacer bind() après tk.Label()
 [✓][BUG-RecursionError] _update_crop_fields récursive → code sorti dans _on_session_loaded
+
+═══════════════════════════════════════════════════
+## FONCTIONNALITÉS — IMPLÉMENTÉES
+═══════════════════════════════════════════════════
+
+[✓][TODO-09] Bouton "+ Chapitre ici" → CmdAddChapter(ts courant)
+[✓][TODO-12] Tooltip timestamp au survol seekbar
+[✓][TODO-13] Combobox alimentée via EvtSessionFilesUpdated
+         → events.py + session_controller.py _emit_session_files()
+         → tkinter_view.py _on_session_files_updated()
+[✓][TODO-14] Double-clic thumbnail → popup édition titre
+[✓][TODO-19] _on_save implémenté (renommage physique OU #toCut.txt)
+[✓][TODO-21] Popups édition : _popup_edit générique + _apply_chapter_info
+[✓][TODO-22] EvtPositionChanged.timestamp_sec : float (sub-seconde)
+[✓][TODO-23] SeekSlider.set_position(ts: float) accepte float
+[✓][TODO-NEW] FilenameBuilder.build(vf) → délègue à vf.build_filename()
 
 ═══════════════════════════════════════════════════
 ## FONCTIONNALITÉS — À IMPLÉMENTER
 ═══════════════════════════════════════════════════
 
-[✓][TODO-09] Bouton "+ Chapitre ici" → CmdAddChapter(ts courant)
+[ ][TODO-11] Raccourcis clavier → BaseView.bind() à définir
+         Suggestions : Espace=play/pause, ←/→=seek ±5s, Ctrl+S=save, PgUp/PgDn=chapitre
 
-[ ][TODO-11] Bouchons restants
-         - BaseView.bind() → raccourcis clavier (à définir)
-         - Chapter.invalidate_display() → vider frame_display/thumb_display
+[ ][TODO-13b] Sélection fichier via combobox → émettre CmdLoadFile(path)
+         session_controller doit exposer la liste des paths de session
+         (actuellement VideoSession.entries n'est pas émis vers la vue)
 
-[✓][TODO-12] Tooltip timestamp au survol seekbar
-
-[ ][TODO-13] Combobox : alimenter avec tous les fichiers de session
-         → EvtSessionFilesUpdated ou passer list[str] dans EvtSessionLoaded
-
-[✓][TODO-14] Double-clic thumbnail → popup édition titre
 [ ][TODO-16] _apply_file_info : commandes CmdEditStudio/CmdEditTitle/...
          à créer dans commands.py quand le besoin sera précisé
+
 [ ][TODO-17] Double-clic panneau chapitre → popup édition (titre/début/durée)
 
-[ ][TODO-18] FrameExtractor.probe : retourne int(float(...)) ✓ déjà bon
+[ ][TODO-20] Tests unitaires (après stabilisation)
+         Priorités : FilenameParser round-trip, CropZone.clamp, resolve_inheritance
 
-[✓][TODO-19] _on_save implémenté (renommage physique OU #toCut.txt)
-[ ][TODO-20] Tests unitaires (reporter après stabilisation des patches)
+═══════════════════════════════════════════════════
+## PROCHAINE SESSION — ORDRE SUGGÉRÉ
+═══════════════════════════════════════════════════
 
-[✓][TODO-21] Popups édition : _popup_edit générique + _apply_chapter_info
-[ ][TODO-22] Seek sub-seconde dans EvtPositionChanged (float) + SeekSlider
+1. [TODO-13b] Câbler combobox → CmdLoadFile : exposer session.entries dans
+   session_controller, émettre EvtSessionFilesUpdated avec les paths,
+   binder <<ComboboxSelected>> → send(CmdLoadFile(path))
 
-[ ][TODO-23] Seek sub-seconde : passer float dans EvtPositionChanged
-         et SeekSlider.set_position(ts: float)
+2. [TODO-11]  Raccourcis clavier : inventaire, choix des touches, implémentation
 
-[ ][TODO-NEW] FilenameBuilder.build(vf) à implémenter pour _on_save
-         → inverse de FilenameParser.parse()
+3. [TODO-17]  Popup édition chapitre (titre + timestamp + durée)
+
+4. [TODO-20]  Tests unitaires prioritaires
