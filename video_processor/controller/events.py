@@ -2,22 +2,20 @@
 File: events.py
 Path: video_processor/controller/events.py
 
-Version: 0.2.0
-Date: 2026-06-23
+Version: 0.3.0
+Date: 2026-06-25
 
 Changelog:
+- 0.3.0 (2026-06-25): Ajouts TODO-13 + TODO-22/23
+  * EvtPositionChanged : timestamp_sec passe de int à float (sub-seconde)
+  * EvtSessionFilesUpdated : liste des fichiers de la session pour la combobox
 - 0.2.0 (2026-06-23): Révision design — événements minimalistes, frozen=True
-  * EvtAllCropsInvalidated : signal pur (pas de données)
-  * EvtCropsResolved : nouvel événement portant les crops recalculés
-  * EvtChapterChanged : transporte index uniquement (la vue a déjà le VideoFile)
-  * EvtCropChanged : crop devient Optional (peut être None si supprimé)
-  * frozen=True sur tous les dataclasses
 - 0.1.0 (2026-06-23): Squelette initial
 """
 
-from __future__ import annotations
+from __future__ import annotations 
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from PIL.Image import Image as PILImage
@@ -31,6 +29,17 @@ if TYPE_CHECKING:
 class EvtSessionLoaded:
     """Nouveau fichier chargé et prêt. La vue stocke video_file pour la session."""
     video_file: "VideoFile"
+
+@dataclass(frozen=True)
+class EvtSessionFilesUpdated:
+    """Liste de tous les fichiers de la session (pour alimenter la combobox).
+
+    Émis une fois au démarrage et à chaque avancement de session.
+    names      : noms affichés dans la combobox (short_name)
+    current    : index du fichier actuellement chargé
+    """
+    names:   List[str]
+    current: int
 
 @dataclass(frozen=True)
 class EvtStatus:
@@ -99,8 +108,14 @@ class EvtThumbReady:
     crop:          Optional["CropZone"]
     inherited:     bool
 
+
+# ── Position ──────────────────────────────────────────────────────────────────
+
 @dataclass(frozen=True)
 class EvtPositionChanged:
-    """Position de lecture courante mise à jour (seek, drag ancre, jump)."""
+    """Position courante dans la vidéo.
+
+    timestamp_sec est un float pour supporter le seek sub-seconde (TODO-22/23).
+    La vue passe cette valeur directement à SeekSlider.set_position().
+    """
     timestamp_sec: float
-    
