@@ -271,8 +271,10 @@ class SessionController:
     def _emit_frame_from_raw(self, vf: VideoFile, ch: Chapter, ts: int) -> None:
         """Render ch.frame_raw avec le crop courant et émet EvtFrameReady."""
         from video_processor.infra.renderer import Renderer
-        scale    = min(1.0, 960 / vf.video_w) if vf.video_w > 0 else 1.0
-        rendered = Renderer.render_frame(ch, scale)
+        # Envoyer l'image en résolution NATIVE (sans pre-scale).
+        # Le letterbox/fit est fait dans _on_frame_ready côté UI.
+        # Un pre-scale ici fausserait _canvas_scale = nw / video_w.
+        rendered = Renderer.render_frame(ch, scale=1.0)
         image = rendered or ch.frame_raw
         if image is None:
             return

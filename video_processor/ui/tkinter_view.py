@@ -678,8 +678,10 @@ class TkinterView(BaseView):
     # ── Drag crop sur canvas ───────────────────────────────────────────────
 
     def _on_canvas_resize(self, event=None) -> None:
-        if self._vf and self._vf.video_w > 0 and self._canvas:
-            self._canvas_scale = self._canvas.winfo_width() / self._vf.video_w
+        # _canvas_scale et _canvas_offset sont mis à jour dans _on_frame_ready
+        # à chaque réception de frame. Recalculer ici (sans hauteur) fausserait
+        # le ratio letterbox et désalignerait les hit-tests crop.
+        pass
 
     def _on_mouse_press(self, event: tk.Event) -> None:
         if self._vf is None:
