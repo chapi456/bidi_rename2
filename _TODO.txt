@@ -1,6 +1,6 @@
 _TODO.txt — bidi_rename2
 ========================
-Mis à jour : 2026-06-25 (session soir)
+Mis à jour : 2026-06-25 (session nuit)
 
 Légende : [✓] corrigé/implémenté  [~] partiel  [ ] à faire  [?] à vérifier
 
@@ -34,6 +34,13 @@ Légende : [✓] corrigé/implémenté  [~] partiel  [ ] à faire  [?] à vérif
 [✓][BUG-25] crash _rebuild_thumb_strip : lbl_txt bindé avant d'être créé
          → déplacer bind() après tk.Label()
 [✓][BUG-RecursionError] _update_crop_fields récursive → code sorti dans _on_session_loaded
+[✓][BUG-26] Ratio canvas change au resize → _on_canvas_resize vidé (pass)
+         _canvas_scale ne doit être mis à jour que dans _on_frame_ready (letterbox exact)
+[✓][BUG-27] Crop non modifiable (spinbox W/H + ancres resize)
+         Cause : _emit_frame_from_raw envoyait une frame pre-scalée (960px)
+         → _on_frame_ready calculait un _canvas_scale erroné
+         Fix : Renderer.render_frame(ch, scale=1.0) — frame native, letterbox
+         côté UI uniquement
 
 ═══════════════════════════════════════════════════
 ## FONCTIONNALITÉS — IMPLÉMENTÉES
@@ -74,12 +81,15 @@ Légende : [✓] corrigé/implémenté  [~] partiel  [ ] à faire  [?] à vérif
 ## PROCHAINE SESSION — ORDRE SUGGÉRÉ
 ═══════════════════════════════════════════════════
 
-1. [TODO-13b] Câbler combobox → CmdLoadFile : exposer session.entries dans
+1. [BUG-26/27] Vérifier en test réel que le crop est bien modifiable
+   et que le ratio canvas est stable après resize
+
+2. [TODO-13b] Câbler combobox → CmdLoadFile : exposer session.entries dans
    session_controller, émettre EvtSessionFilesUpdated avec les paths,
    binder <<ComboboxSelected>> → send(CmdLoadFile(path))
 
-2. [TODO-11]  Raccourcis clavier : inventaire, choix des touches, implémentation
+3. [TODO-11]  Raccourcis clavier : inventaire, choix des touches, implémentation
 
-3. [TODO-17]  Popup édition chapitre (titre + timestamp + durée)
+4. [TODO-17]  Popup édition chapitre (titre + timestamp + durée)
 
-4. [TODO-20]  Tests unitaires prioritaires
+5. [TODO-20]  Tests unitaires prioritaires
