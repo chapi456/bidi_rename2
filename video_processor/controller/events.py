@@ -98,5 +98,9 @@ class EvtThumbReady:
     image:         "PILImage"
     crop:          Optional["CropZone"]
     inherited:     bool
-    
+
+@dataclass(frozen=True)
+class EvtPositionChanged:
+    """Position de lecture courante mise à jour (seek, drag ancre, jump)."""
+    timestamp_sec: float
     

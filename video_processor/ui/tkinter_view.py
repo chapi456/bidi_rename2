@@ -617,12 +617,12 @@ class TkinterView(BaseView):
             lbl_img.bind("<Button-1>", lambda _, idx=i: self._on_thumb_click(idx))
             lbl_img.bind("<Double-Button-1>",
                          lambda _, idx=i: self._on_thumb_double_click(idx))
-            lbl_txt.bind("<Double-Button-1>",
-                         lambda _, idx=i: self._on_thumb_double_click(idx))
 
             lbl_txt = tk.Label(cell, text=self._chapter_label(ch),
                                bg="#111", fg=FG, font=FONT_LABEL)
             lbl_txt.pack()
+            lbl_txt.bind("<Double-Button-1>",
+                         lambda _, idx=i: self._on_thumb_double_click(idx))
             self._thumb_frames.append(lbl_img)
             self._thumb_images.append(None)
             self._thumb_labels.append(lbl_txt)
