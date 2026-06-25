@@ -111,3 +111,9 @@ Légende : [✓] corrigé/implémenté  [~] partiel  [ ] à faire  [?] à vérif
 [~][TODO-CUT] Découpe vidéo réelle
          Non trouvée dans le code relu
          Aujourd’hui : métadonnées chapitres + #toCut.txt, pas d’export vidéo
+
+[ ][BUG-28] resolve_inheritance() écrase la taille d’un crop_explicit centré
+         Symptôme : explicit.w/h changent, effective.w/h restent à l’ancienne valeur
+         Impact : spinbox W/H et resize par ancre visuellement sans effet durable
+         Fix : si crop_explicit existe, crop_effective doit reprendre w/h explicites ;
+               en mode center, ne recalculer que pos_x/pos_y
