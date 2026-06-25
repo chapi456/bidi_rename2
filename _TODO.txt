@@ -108,12 +108,58 @@ Légende : [✓] corrigé/implémenté  [~] partiel  [ ] à faire  [?] à vérif
 [✓][TODO-19] Save / Save+Next
          _on_save() implémenté ; rename physique ou MAJ #toCut.txt selon uses_tocut
 
-[~][TODO-CUT] Découpe vidéo réelle
-         Non trouvée dans le code relu
-         Aujourd’hui : métadonnées chapitres + #toCut.txt, pas d’export vidéo
+
 
 [ ][BUG-28] resolve_inheritance() écrase la taille d’un crop_explicit centré
          Symptôme : explicit.w/h changent, effective.w/h restent à l’ancienne valeur
          Impact : spinbox W/H et resize par ancre visuellement sans effet durable
          Fix : si crop_explicit existe, crop_effective doit reprendre w/h explicites ;
                en mode center, ne recalculer que pos_x/pos_y
+
+═══════════════════════════════════════════════════
+## BUGS — À CORRIGER
+═══════════════════════════════════════════════════
+
+[ ][BUG-28] resolve_inheritance() écrase w/h d'un crop_explicit en mode center
+         Symptôme : spinbox W/H et resize par ancre reçus par le contrôleur (explicit change),
+         mais effective reste à l'ancienne taille après chaque resolve_inheritance()
+         Fichier  : video_processor/domain/video_file.py
+         Fix      : si crop_explicit existe, effective.w/h = explicit.w/h toujours ;
+                    si pos_mode == "center", recalculer uniquement pos_x/pos_y
+                    à partir de la taille explicite courante (pas de la taille initiale)
+
+[ ][BUG-27b] _on_canvas_resize recalcule _canvas_scale sans la hauteur
+         Symptôme : ratio image change au resize de la fenêtre
+         Fichier  : video_processor/ui/tkinter_view.py — _on_canvas_resize()
+         Fix      : remplacer le corps par pass (_canvas_scale est mis à jour
+                    dans _on_frame_ready avec min(cw/iw, ch/ih))
+
+[ ][BUG-29] _emit_frame_from_raw pré-scale la frame à 960px avant envoi
+         Symptôme : _on_frame_ready reçoit une image déjà réduite → _canvas_scale faux
+         Fichier  : video_processor/controller/session_controller.py — _emit_frame_from_raw()
+         Fix      : Renderer.render_frame(ch, scale=1.0), letterbox côté UI uniquement
+
+═══════════════════════════════════════════════════
+## FONCTIONNALITÉS — À IMPLÉMENTER (suite)
+═══════════════════════════════════════════════════
+
+[ ][TODO-13b] Sélection fichier via combobox → CmdLoadFile(path)
+         _emit_session_files() à ajouter dans session_controller.py
+         _on_session_files_updated() à ajouter dans tkinter_view.py
+         Vérifier noms exacts : VideoSession.entries / current_index
+
+[ ][TODO-11] Raccourcis clavier
+         _bind_shortcuts() à ajouter dans tkinter_view.py (appel depuis _build())
+         ←/→ ±5s, Shift+←/→ ±30s, PgUp/PgDn chapitre, Home/End, Ctrl+S, Ctrl+Enter
+
+[ ][TODO-17] Popup édition chapitre (panneau droit, double-clic)
+         Remplacer _on_edit_chapter_info() par appel à _popup_edit_chapter()
+         Modale : Titre + Début + Durée → CmdEditChapter
+
+[ ][TODO-CUT] Découpe vidéo réelle (pipeline FFmpeg/équivalent)
+         Aujourd'hui : seul le rename physique / #toCut.txt est implémenté
+         Pas de découpage média effectif identifié dans le code
+
+[~][TODO-CUT] Découpe vidéo réelle
+         Non trouvée dans le code relu
+         Aujourd’hui : métadonnées chapitres + #toCut.txt, pas d’export vidéo
