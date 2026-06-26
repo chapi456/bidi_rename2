@@ -208,13 +208,22 @@ class SessionController:
         self._current_ts = 0
         self._emit(EVT.EvtSessionLoaded(video_file=vf))
         self._emit(EVT.EvtTitle(text=path.stem))
+        self._emit_session_files()
         self._emit(EVT.EvtStatus(
             f"Prêt : {len(chapters)} chapitre(s) — {total_sec}s"
         ))
 
         threading.Thread(target=self._preload_thumbs, daemon=True).start()
         threading.Thread(target=self._load_frame, args=(0,), daemon=True).start()
-
+    def _emit_session_files(self) -> None:
+        """Émet la liste des fichiers de la session avec le chemin complet."""
+        entries = [
+            (e.short_name, e.physical_path)
+            for e in self._session.entries
+        ]
+        current_idx = self._session.current_index
+        self._emit(EVT.EvtSessionFilesUpdated(names=entries,current=current_idx))
+        
     def _preload_thumbs(self) -> None:
         from video_processor.infra.frame_extractor import FrameExtractor
         from video_processor.infra.renderer        import Renderer

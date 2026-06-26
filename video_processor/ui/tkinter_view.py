@@ -128,7 +128,8 @@ class TkinterView(BaseView):
             EVT.EvtAllCropsInvalidated: self._on_all_crops_invalidated,
             EVT.EvtFrameReady:          self._on_frame_ready,
             EVT.EvtThumbReady:          self._on_thumb_ready,
-            EVT.EvtPositionChanged:     self._on_position_changed
+            EVT.EvtPositionChanged:     self._on_position_changed,
+            EVT.EvtSessionFilesUpdated: self._on_session_files_updated,
         }
         h = handlers.get(type(event))
         if h:
@@ -458,6 +459,15 @@ class TkinterView(BaseView):
             except ValueError:
                 pass
 
+    def _on_session_files_updated(self, evt: EVT.EvtSessionFilesUpdated) -> None:
+        """Alimente la combobox avec tous les fichiers de la session."""
+        if not hasattr(self, "_file_combo") or self._file_combo is None:
+            return
+        self._session_paths = {name: path for name, path in evt.names}
+        self._file_combo["values"] = [name for name, _ in evt.names]
+        if evt.current < len(evt.names):
+            self._file_var.set(evt.names[evt.current][0])
+            
     def _on_session_loaded(self, evt: EVT.EvtSessionLoaded) -> None:
         self._vf = evt.video_file
         self._rebuild_thumb_strip()
@@ -852,10 +862,10 @@ class TkinterView(BaseView):
         self._send(CMD.CmdSeekAbs(timestamp_sec=ts_sec))
 
     def _on_file_combo_selected(self) -> None:
-        from pathlib import Path
         name = self._file_var.get()
-        if self._vf and name != self._vf.short_name:
-            self._send(CMD.CmdLoadFile(path=self._vf.physical_path.parent / name))
+        paths = getattr(self, "_session_paths", {})
+        if name in paths and (self._vf is None or name != self._vf.short_name):
+            self._send(CMD.CmdLoadFile(path=paths[name]))
 
     # ── run ───────────────────────────────────────────────────────────────
 
