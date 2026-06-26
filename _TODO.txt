@@ -4,140 +4,24 @@ Mis à jour : 2026-06-25 (session nuit)
 
 Légende : [✓] corrigé/implémenté  [~] partiel  [ ] à faire  [?] à vérifier
 
-═══════════════════════════════════════════════════
-## BUGS — CONFIRMÉS ET COMMITÉS
-═══════════════════════════════════════════════════
+[ ][TODO-09] Bouton "+ Chapitre ici" → CmdAddChapter(ts courant)
+[ ][TODO-12] Tooltip timestamp au survol seekbar
+[ ][TODO-14] Double-clic thumbnail → popup édition titre
+[ ][TODO-19] _on_save implémenté (renommage physique ET #toCut.txt)
+[ ][TODO-21] Popups édition : _popup_edit générique + _apply_chapter_info
 
-[✓][BUG-01] CropZone dépasse limites vidéo → clamp dans _on_set_crop
-[✓][BUG-02] Bord gauche chapitre allonge durée → _on_chapter_edge corrigé
-[✓][BUG-03] Ancre start ch[0] manquante → condition if i > 0 supprimée
-[✓][BUG-04] Curseur seek mal mis à jour → EvtPositionChanged émis
-[✓][BUG-05] Clic seekbar n'activait pas le chapitre → CmdJump dans _on_press
-[✓][BUG-06] Preset G/C/D sans mise à jour canvas → EvtCropChanged + re-render
-[✓][BUG-07] Highlight dans ruler au lieu piste → fond coloré dans [H_RULER..H]
-[✓][BUG-08] Curseurs souris / poignées crop mal alignées
-         tol = HANDLE_R + 5, handles décalés de (ox, oy) letterbox
-[✓][BUG-09] Spinbox <Return>/<FocusOut> manquants → bindés
-[✓][BUG-10] Drag ancre : frame principale pas rechargée → CmdSeekAbs dans _on_drag
-[✓][BUG-11] Curseur seek dessiné dans ruler → corrigé seek_slider.py
-[✓][BUG-12] Durée chapitre dans ruler → déplacé dans piste seek_slider.py
-[✓][BUG-13] ch[0] sans ancre start → if i > 0 supprimé seek_slider.py + _find_handle
-[✓][BUG-14] Spinbox X/Y init à 0 malgré crop center → _update_crop_fields au load
-[✓][BUG-15] Spinbox flèches ▲▼ remettent X/Y à 0 → forcé .set() dans _update_crop_fields
-[✓][BUG-16] Spinbox W/H non fonctionnels → binder sur _on_crop_spinbox + from_=1
-[✓][BUG-17] Curseur seek non positionné à l'ouverture → seek_slider.set_position(ch0)
-[✓][BUG-18] Image canvas déformée → letterbox ratio-fit + offset mémorisé
-[✓][BUG-21] timestamp_sec: float dans CmdSeekAbs + _current_ts: float
-[✓][BUG-22] Hit-tests crop ignoraient offset letterbox → handles avec (ox, oy)
-[✓][BUG-23] Infos panels non rafraîchis → _update_info_panels() dans _on_chapters_updated
-[✓][BUG-24] Ordre panneau fichier incorrect → Studio/Acteur(s)/Date/Style(s)/Titre
-[✓][BUG-25] crash _rebuild_thumb_strip : lbl_txt bindé avant d'être créé
-         → déplacer bind() après tk.Label()
-[✓][BUG-RecursionError] _update_crop_fields récursive → code sorti dans _on_session_loaded
-[✓][BUG-26] Ratio canvas change au resize → _on_canvas_resize vidé (pass)
-         _canvas_scale ne doit être mis à jour que dans _on_frame_ready (letterbox exact)
-[✓][BUG-27] Crop non modifiable (spinbox W/H + ancres resize)
-         Cause : _emit_frame_from_raw envoyait une frame pre-scalée (960px)
-         → _on_frame_ready calculait un _canvas_scale erroné
-         Fix : Renderer.render_frame(ch, scale=1.0) — frame native, letterbox
-         côté UI uniquement
-
-═══════════════════════════════════════════════════
-## FONCTIONNALITÉS — IMPLÉMENTÉES
-═══════════════════════════════════════════════════
-
-[✓][TODO-09] Bouton "+ Chapitre ici" → CmdAddChapter(ts courant)
-[✓][TODO-12] Tooltip timestamp au survol seekbar
-[✓][TODO-13] Combobox alimentée via EvtSessionFilesUpdated
-         → events.py + session_controller.py _emit_session_files()
-         → tkinter_view.py _on_session_files_updated()
-[✓][TODO-14] Double-clic thumbnail → popup édition titre
-[✓][TODO-19] _on_save implémenté (renommage physique OU #toCut.txt)
-[✓][TODO-21] Popups édition : _popup_edit générique + _apply_chapter_info
-[✓][TODO-22] EvtPositionChanged.timestamp_sec : float (sub-seconde)
-[✓][TODO-23] SeekSlider.set_position(ts: float) accepte float
-[✓][TODO-NEW] FilenameBuilder.build(vf) → délègue à vf.build_filename()
-
-═══════════════════════════════════════════════════
-## FONCTIONNALITÉS — À IMPLÉMENTER
-═══════════════════════════════════════════════════
-
-[ ][TODO-11] Raccourcis clavier → BaseView.bind() à définir
-         Suggestions : Espace=play/pause, ←/→=seek ±5s, Ctrl+S=save, PgUp/PgDn=chapitre
-
-[ ][TODO-13b] Sélection fichier via combobox → émettre CmdLoadFile(path)
-         session_controller doit exposer la liste des paths de session
-         (actuellement VideoSession.entries n'est pas émis vers la vue)
-
-[ ][TODO-16] _apply_file_info : commandes CmdEditStudio/CmdEditTitle/...
-         à créer dans commands.py quand le besoin sera précisé
-
-[ ][TODO-17] Double-clic panneau chapitre → popup édition (titre/début/durée)
-
-[ ][TODO-20] Tests unitaires (après stabilisation)
-         Priorités : FilenameParser round-trip, CropZone.clamp, resolve_inheritance
 
 ═══════════════════════════════════════════════════
 ## PROCHAINE SESSION — ORDRE SUGGÉRÉ
 ═══════════════════════════════════════════════════
 
-1. [BUG-26/27] Vérifier en test réel que le crop est bien modifiable
-   et que le ratio canvas est stable après resize
+[ ][BUG-16] Spinbox W/H non fonctionnels
+ 
+[ ][BUG-27b] Resize crop : poignée détectée au survol mais non fonctionelles
 
-2. [TODO-13b] Câbler combobox → CmdLoadFile : exposer session.entries dans
-   session_controller, émettre EvtSessionFilesUpdated avec les paths,
-   binder <<ComboboxSelected>> → send(CmdLoadFile(path))
+[ ][TODO-19] Save / Save+Next
 
-3. [TODO-11]  Raccourcis clavier : inventaire, choix des touches, implémentation
-
-4. [TODO-17]  Popup édition chapitre (titre + timestamp + durée)
-
-5. [TODO-20]  Tests unitaires prioritaires
-
-
-[~][BUG-16] Spinbox W/H non fonctionnels
-         Code en place, mais non validé en test réel
-         Les logs fournis montrent surtout des CmdSetCrop de déplacement (pos_x/pos_y)
-         → à requalifier après correction du mode resize par poignée
-
-[ ][BUG-27b] Resize crop : poignée détectée au survol mais non capturée au clic
-         Symptôme : curseur resize OK, drag => move au lieu de resize
-         Cause probable : _on_mouse_press redétecte la poignée puis retombe dans move
-         Fix : mémoriser hover_handle_idx et verrouiller le mode resize au clic
-
-[✓][TODO-19] Save / Save+Next
-         _on_save() implémenté ; rename physique ou MAJ #toCut.txt selon uses_tocut
-
-
-
-[ ][BUG-28] resolve_inheritance() écrase la taille d’un crop_explicit centré
-         Symptôme : explicit.w/h changent, effective.w/h restent à l’ancienne valeur
-         Impact : spinbox W/H et resize par ancre visuellement sans effet durable
-         Fix : si crop_explicit existe, crop_effective doit reprendre w/h explicites ;
-               en mode center, ne recalculer que pos_x/pos_y
-
-═══════════════════════════════════════════════════
-## BUGS — À CORRIGER
-═══════════════════════════════════════════════════
-
-[ ][BUG-28] resolve_inheritance() écrase w/h d'un crop_explicit en mode center
-         Symptôme : spinbox W/H et resize par ancre reçus par le contrôleur (explicit change),
-         mais effective reste à l'ancienne taille après chaque resolve_inheritance()
-         Fichier  : video_processor/domain/video_file.py
-         Fix      : si crop_explicit existe, effective.w/h = explicit.w/h toujours ;
-                    si pos_mode == "center", recalculer uniquement pos_x/pos_y
-                    à partir de la taille explicite courante (pas de la taille initiale)
-
-[ ][BUG-27b] _on_canvas_resize recalcule _canvas_scale sans la hauteur
-         Symptôme : ratio image change au resize de la fenêtre
-         Fichier  : video_processor/ui/tkinter_view.py — _on_canvas_resize()
-         Fix      : remplacer le corps par pass (_canvas_scale est mis à jour
-                    dans _on_frame_ready avec min(cw/iw, ch/ih))
-
-[ ][BUG-29] _emit_frame_from_raw pré-scale la frame à 960px avant envoi
-         Symptôme : _on_frame_ready reçoit une image déjà réduite → _canvas_scale faux
-         Fichier  : video_processor/controller/session_controller.py — _emit_frame_from_raw()
-         Fix      : Renderer.render_frame(ch, scale=1.0), letterbox côté UI uniquement
+[ ][BUG-27b] Symptôme : ratio image change au déplacement de la crop zone
 
 ═══════════════════════════════════════════════════
 ## FONCTIONNALITÉS — À IMPLÉMENTER (suite)
@@ -147,19 +31,3 @@ Légende : [✓] corrigé/implémenté  [~] partiel  [ ] à faire  [?] à vérif
          _emit_session_files() à ajouter dans session_controller.py
          _on_session_files_updated() à ajouter dans tkinter_view.py
          Vérifier noms exacts : VideoSession.entries / current_index
-
-[ ][TODO-11] Raccourcis clavier
-         _bind_shortcuts() à ajouter dans tkinter_view.py (appel depuis _build())
-         ←/→ ±5s, Shift+←/→ ±30s, PgUp/PgDn chapitre, Home/End, Ctrl+S, Ctrl+Enter
-
-[ ][TODO-17] Popup édition chapitre (panneau droit, double-clic)
-         Remplacer _on_edit_chapter_info() par appel à _popup_edit_chapter()
-         Modale : Titre + Début + Durée → CmdEditChapter
-
-[ ][TODO-CUT] Découpe vidéo réelle (pipeline FFmpeg/équivalent)
-         Aujourd'hui : seul le rename physique / #toCut.txt est implémenté
-         Pas de découpage média effectif identifié dans le code
-
-[~][TODO-CUT] Découpe vidéo réelle
-         Non trouvée dans le code relu
-         Aujourd’hui : métadonnées chapitres + #toCut.txt, pas d’export vidéo

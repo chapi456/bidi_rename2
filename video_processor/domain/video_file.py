@@ -123,10 +123,15 @@ class VideoFile:
             )
 
     def _apply_global_size(self, crop: CropZone) -> CropZone:
-        """Retourne crop avec la taille de global_crop_size si définie.
-        La position (pos_x, pos_y) du crop d'origine est conservée.
+        """Retourne crop avec la taille de global_crop_size si définie,
+        SAUF si le crop_explicit a déjà une taille propre (w > 0).
+        La taille globale ne sert que d'initialisation.
+        La position (pos_x, pos_y) du crop d'origine est toujours conservée.
         """
         if self.global_crop_size is None:
+            return crop
+        # Si le crop a déjà une taille explicite, ne pas l'écraser
+        if crop.w > 0 and crop.h > 0:
             return crop
         return CropZone(
             w=self.global_crop_size.w,
