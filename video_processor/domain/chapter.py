@@ -2,10 +2,15 @@
 File: chapter.py
 Path: video_processor/domain/chapter.py
 
-Version: 0.1.0
-Date: 2026-06-23
+Version: 2.0.0
+Date: 2026-06-26
 
 Changelog:
+- 2.0.0 (2026-06-26): Refactoring CropZone → CropPos
+  * crop_explicit / crop_effective supprimés
+  * crop_pos (CropPos) : position explicite ou héritée du chapitre précédent
+  * pos_inherited : True si position héritée
+  * is_inherited supprimé (remplacé par pos_inherited)
 - 0.1.0 (2026-06-23): Squelette initial
 """
 
@@ -16,7 +21,7 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from PIL import Image as PILImage
-    from .crop_zone import CropZone
+    from .crop_pos import CropPos
 
 log = logging.getLogger("domain.chapter")
 
@@ -25,39 +30,35 @@ log = logging.getLogger("domain.chapter")
 class Chapter:
     index:           int
     timestamp_sec:   int
-    timestamp_raw:   str          # "01-23" tel que dans le nom fichier
+    timestamp_raw:   str
     duration_sec:    int
     title:           Optional[str] = None
 
-    # ── Crop ──────────────────────────────────────────────────────────────
-    # crop_explicit  : ce que l'utilisateur a défini pour CE chapitre
-    # crop_effective : résultat après héritage (calculé par resolve_inheritance)
-    crop_explicit:   Optional["CropZone"] = field(default=None, repr=False)
-    crop_effective:  Optional["CropZone"] = field(default=None, repr=False)
-    is_inherited:    bool                  = False
+    # ── Position crop (niveau chapitre) ───────────────────────────────────
+    # None  → aucune position définie (pas de crop pour ce chapitre)
+    # CropPos(explicit=True)  → posé par l'utilisateur
+    # CropPos(explicit=False) → hérité du chapitre précédent
+    crop_pos:      Optional["CropPos"] = field(default=None, repr=False)
+    pos_inherited: bool                = False
 
     # ── Cache media (lazy) ────────────────────────────────────────────────
-    # Jamais manipulé directement par l'UI — via SessionController uniquement
-    frame_raw:       Optional["PILImage"] = field(default=None, repr=False)
-    thumb_raw:       Optional["PILImage"] = field(default=None, repr=False)
+    frame_raw:     Optional["PILImage"] = field(default=None, repr=False)
+    thumb_raw:     Optional["PILImage"] = field(default=None, repr=False)
 
-    # Flags d'état asynchrone
-    frame_loading:   bool = False
-    thumb_loading:   bool = False
+    frame_loading: bool = False
+    thumb_loading: bool = False
 
-    # ── Rendu calculé (invalidé quand crop ou frame change) ───────────────
-    frame_display:   Optional["PILImage"] = field(default=None, repr=False)
-    thumb_display:   Optional["PILImage"] = field(default=None, repr=False)
+    frame_display: Optional["PILImage"] = field(default=None, repr=False)
+    thumb_display: Optional["PILImage"] = field(default=None, repr=False)
 
     # ── Propriétés ────────────────────────────────────────────────────────
 
     @property
     def has_crop(self) -> bool:
-        return self.crop_effective is not None
+        return self.crop_pos is not None
 
     @property
     def label(self) -> str:
-        """Label court pour UI : 'Ch1 — 00:01:23'."""
         m, s = divmod(self.timestamp_sec, 60)
         h, m = divmod(m, 60)
         ts = f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
@@ -66,16 +67,12 @@ class Chapter:
     # ── Invalidation cache ────────────────────────────────────────────────
 
     def invalidate_display(self) -> None:
-        """Invalide les images rendues (frame + thumb).
-        À appeler dès que crop_effective ou frame_raw change.
-        """
-        log.debug("BOUCHON Chapter[%d].invalidate_display()", self.index)
+        log.debug("Chapter[%d].invalidate_display()", self.index)
         self.frame_display = None
         self.thumb_display = None
 
     def invalidate_all(self) -> None:
-        """Invalide tout y compris les raws (changement de fichier)."""
-        log.debug("BOUCHON Chapter[%d].invalidate_all()", self.index)
+        log.debug("Chapter[%d].invalidate_all()", self.index)
         self.frame_raw     = None
         self.thumb_raw     = None
         self.frame_display = None
@@ -87,18 +84,17 @@ class Chapter:
 
     def to_filename_token(self) -> str:
         """Génère le token chapitre pour build_filename().
-        Inclut la position du crop si explicite.
+        La taille crop (w/h) est portée par VideoFile, pas ici.
+        Seule la position est incluse si explicite.
         """
-        log.debug("BOUCHON Chapter[%d].to_filename_token()", self.index)
+        log.debug("Chapter[%d].to_filename_token()", self.index)
         parts = [self.timestamp_raw]
         if self.duration_sec:
             parts.append(f"({self.duration_sec})")
         if self.title:
             parts.append(f"({self.title})")
-        if self.crop_explicit and self.crop_explicit.explicit:
-            c = self.crop_explicit
-            if c.pos_mode == "center":
-                parts.append("(CENTER)")
-            elif c.pos_x != 0 or c.pos_y != 0:
-                parts.append(f"({c.pos_x}x{c.pos_y})")
+        if self.crop_pos is not None:
+            token = self.crop_pos.to_filename_token()
+            if token:
+                parts.append(token)
         return "".join(parts)

@@ -41,9 +41,10 @@ CmdRefreshThumb(chapter_index: int)
 
 ```python
 EvtSessionLoaded(video_file: VideoFile)
-EvtSessionFilesUpdated(names: List[str], current: int)
-#   names   = [e.short_name for e in session.entries]
+EvtSessionFilesUpdated(names: List[Tuple[str, Path]], current: int)
+#   names   = [(e.short_name, e.physical_path) for e in session.entries]
 #   current = session.current_index
+#   ⚠ names est une List[Tuple[str,Path]], pas List[str]
 
 EvtStatus(text: str)
 EvtTitle(text: str)
@@ -145,8 +146,12 @@ VideoFile(
     # Règle 3 : pas explicit + rien → effective=None, is_inherited=False
 
 ._apply_global_size(crop: CropZone) -> CropZone
-    # Remplace w/h par global_crop_size.w/h, conserve pos_x/pos_y/pos_mode
-    # Retourne crop tel quel si global_crop_size is None
+    # BUG-28 corrigé :
+    # - crop.w > 0 et crop.h > 0 → taille propre conservée, global_crop_size ignoré pour w/h
+    # - crop.w == 0 ou crop.h == 0 → utilise global_crop_size.w/h
+    # - pos_mode == "center" → recalcule pos_x/pos_y depuis video_w/video_h
+    # - pos_mode != "center"  → pos_x/pos_y du crop_explicit conservés tels quels
+    # - global_crop_size is None → retourne crop inchangé
 
 .invalidate_all_displays() -> None
 .build_filename() -> str          # long_name complet reconstruit
@@ -220,7 +225,8 @@ class SessionController:
 
 # Helpers internes
 ._emit_session_files() -> None
-    # Émet EvtSessionFilesUpdated(names=[e.short_name ...], current=index)
+    # Émet EvtSessionFilesUpdated(names=[(e.short_name, e.physical_path), ...],
+    #                              current=session.current_index)
 ._load_entry(path: Path) -> None
 ._preload_thumbs() -> None        # thread daemon
 ._load_frame(chapter_index: int, ts_sec: Optional[int]=None) -> None
@@ -236,7 +242,7 @@ class SessionController:
 class TkinterView(BaseView):
     # État
     ._vf: Optional[VideoFile]          # source de vérité UI
-    ._canvas_scale: float              # nw / video_w (mis à jour dans _on_frame_ready)
+    ._canvas_scale: float              # nw / video_w (mis à jour dans _on_frame_ready uniquement)
     ._canvas_offset: tuple[int,int]    # (off_x, off_y) letterbox
     ._drag_state: Optional[dict]       # {mode, handle_idx, snap_x, snap_y, crop0}
     ._hover_handle_idx: Optional[int]
@@ -253,8 +259,9 @@ class TkinterView(BaseView):
     # Handlers événements
     ._on_session_loaded(EvtSessionLoaded)
     ._on_session_files_updated(EvtSessionFilesUpdated)
-        # Alimente _file_combo["values"] = evt.names
-        # _file_var.set(evt.names[evt.current])
+        # Alimente _session_paths = {name: path for name, path in evt.names}
+        # _file_combo["values"] = [name for name, _ in evt.names]
+        # _file_var.set(evt.names[evt.current][0])
     ._on_status(EvtStatus)
     ._on_title(EvtTitle)
     ._on_dirty(EvtDirty)
@@ -262,21 +269,26 @@ class TkinterView(BaseView):
     ._on_chapters_updated(EvtChaptersUpdated)
     ._on_crop_changed(EvtCropChanged)
     ._on_all_crops_invalidated(EvtAllCropsInvalidated)
-    ._on_frame_ready(EvtFrameReady)        # calcule scale + offset letterbox
+    ._on_frame_ready(EvtFrameReady)
+        # Fit ratio-letterbox dans le canvas
+        # Calcule canvas_scale = nw / video_w et canvas_offset = (off_x, off_y)
+        # ⚠ seul endroit qui met à jour _canvas_scale — _on_canvas_resize = pass
     ._on_thumb_ready(EvtThumbReady)
     ._on_position_changed(EvtPositionChanged)
 
     # Interactions utilisateur
-    ._on_file_combo_selected()             # → CmdLoadFile si nom ≠ courant
-    ._on_canvas_resize(event=None)         # corps = pass (scale mis à jour par _on_frame_ready)
+    ._on_file_combo_selected()
+        # Lit _session_paths[_file_var.get()] → CmdLoadFile(path)
+        # Ne fait rien si fichier déjà actif
+    ._on_canvas_resize(event=None)     # corps = pass (BUG-27b)
     ._on_mouse_press/_move/_release/_hover # drag crop : move + resize 8 poignées
-    ._on_crop_spinbox()                    # → CmdSetCrop(w, h)
-    ._on_position_spinbox()                # → CmdSetCrop(pos_x, pos_y)
-    ._on_thumb_click(chapter_index)        # → CmdJump
-    ._on_thumb_double_click(chapter_index) # popup titre chapitre
-    ._on_add_chapter_here()               # → CmdAddChapter(ts courant)
-    ._on_edit_file_info(key)               # popup (TODO-16, non câblé)
-    ._on_edit_chapter_info(key)            # popup titre/durée chapitre actif
+    ._on_crop_spinbox()                # → CmdSetCrop(w, h)
+    ._on_position_spinbox()            # → CmdSetCrop(pos_x, pos_y)
+    ._on_thumb_click(chapter_index)    # → CmdJump
+    ._on_thumb_double_click(index)     # popup titre chapitre → CmdEditChapter
+    ._on_add_chapter_here()            # → CmdAddChapter(ts courant)
+    ._on_edit_file_info(key)           # popup (TODO-16, non câblé)
+    ._on_edit_chapter_info(key)        # popup titre/durée chapitre actif → CmdEditChapter
 
     # Helpers UI
     ._update_info_panels()
@@ -296,7 +308,7 @@ class TkinterView(BaseView):
 
 ```python
 Renderer.render_frame(ch: Chapter, scale: float=1.0) -> Optional[PILImage]
-    # scale=1.0 → frame native, letterbox côté UI uniquement
+    # scale=1.0 → frame native, letterbox côté UI uniquement (BUG-29 corrigé)
 Renderer.render_thumb_scaled(ch: Chapter, vw: int, vh: int) -> Optional[PILImage]
 Renderer._handles(crop: CropZone, canvas_scale: float) -> list[tuple[int,int]]
     # 8 poignées en coordonnées canvas (sans offset letterbox)
@@ -312,3 +324,13 @@ FrameExtractor.probe(path: Path) -> tuple[int, int, int]   # vw, vh, total_sec
 FrameExtractor.extract(path: Path, ts_sec: int) -> Optional[PILImage]
 FrameExtractor.extract_thumb(path: Path, ts_sec: int) -> Optional[PILImage]
 ```
+
+---
+
+## Statut bugs / fonctionnalités (itération 1 — 2026-06-26)
+
+| ID | Statut | Fichier | Description |
+|----|--------|---------|-------------|
+| BUG-27b | ✅ Corrigé | `tkinter_view.py` | `_on_canvas_resize` = `pass` — scale mis à jour par `_on_frame_ready` uniquement |
+| BUG-28 | ✅ Corrigé | `video_file.py` | `_apply_global_size` conserve taille propre du crop_explicit ; recalcul centrage uniquement si `pos_mode=="center"` |
+| BUG-29 | ✅ Corrigé | `session_controller.py` | `_emit_frame_from_raw` appelle `Renderer.render_frame(ch, scale=1.0)` — letterbox délégué à l'UI |

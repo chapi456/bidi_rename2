@@ -2,15 +2,19 @@
 File: video_file.py
 Path: video_processor/domain/video_file.py
 
-Version: 1.0.0
-Date: 2026-06-23
+Version: 1.1.0
+Date: 2026-06-26
 
 Changelog:
+- 1.1.0 (2026-06-26): BUG-28 — _apply_global_size corrigé
+  * Taille propre du crop_explicit (w>0, h>0) conservée ; global_crop_size ne
+    remplace plus une taille explicitement définie
+  * Recalcul pos_x/pos_y en mode "center" UNIQUEMENT (pos topleft conservée)
+  * Optimisation : retourne crop inchangé si aucune valeur ne diffère
 - 1.0.0 (2026-06-23): Implémentation complète
-  * resolve_inheritance() : héritage crop chapitre par chapitre, taille globale appliquée
-  * build_filename() : reconstruit le long_name depuis toutes les métadonnées
-  * build_short_filename() : nom tronqué avant CROP/chapitres (pour #toCut.txt)
-  * invalidate_all_displays() et chapter_at_time() : déjà corrects, logs nettoyés
+  * resolve_inheritance() : héritage crop chapitre par chapitre
+  * build_filename() / build_short_filename() : reconstruction nom
+  * invalidate_all_displays(), chapter_at_time()
 - 0.1.0 (2026-06-23): Squelette initial
 """
 
@@ -21,7 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from .chapter  import Chapter
+from .chapter import Chapter
 from .crop_zone import CropZone
 
 log = logging.getLogger("domain.video_file")
@@ -31,38 +35,35 @@ log = logging.getLogger("domain.video_file")
 class VideoFile:
     # ── Identité ──────────────────────────────────────────────────────────
     physical_path: Path
-    short_name:    str          # nom réel sur disque
-    long_name:     str          # nom enrichi (#toCut.txt ou = short_name)
-    uses_tocut:    bool = False
-    complement:    str  = ""    # partie stockée dans #toCut.txt
+    short_name: str
+    long_name: str
+    uses_tocut: bool = False
+    complement: str = ""
 
     # ── Métadonnées parsées ───────────────────────────────────────────────
-    title:    Optional[str] = None
-    studio:   Optional[str] = None
-    actors:   list[str]     = field(default_factory=list)
-    styles:   list[str]     = field(default_factory=list)
-    date:     Optional[str] = None
-    booleans: dict          = field(default_factory=dict)   # POV, 3D, NOCUT…
-    options:  dict          = field(default_factory=dict)   # ENCODE, RESIZE…
-    file_id:  Optional[str] = None
+    title: Optional[str] = None
+    studio: Optional[str] = None
+    actors: list[str] = field(default_factory=list)
+    styles: list[str] = field(default_factory=list)
+    date: Optional[str] = None
+    booleans: dict = field(default_factory=dict)
+    options: dict = field(default_factory=dict)
+    file_id: Optional[str] = None
 
     # ── Dimensions vidéo ──────────────────────────────────────────────────
-    video_w:            int = 0
-    video_h:            int = 0
+    video_w: int = 0
+    video_h: int = 0
     total_duration_sec: int = 0
 
     # ── Crop GLOBAL (taille partagée) ─────────────────────────────────────
-    # Seuls w et h sont globaux ; pos_x/pos_y sont par chapitre (crop_explicit)
     global_crop_size: Optional[CropZone] = None
 
     # ── Chapitres ─────────────────────────────────────────────────────────
     chapters: list[Chapter] = field(default_factory=list)
 
     # ── État session ──────────────────────────────────────────────────────
-    active_index: int  = 0
-    dirty:        bool = False
-
-    # ── Propriétés ────────────────────────────────────────────────────────
+    active_index: int = 0
+    dirty: bool = False
 
     @property
     def active_chapter(self) -> Optional[Chapter]:
@@ -79,85 +80,83 @@ class VideoFile:
     def extension(self) -> str:
         return self.physical_path.suffix
 
-    # ── Héritage crop ─────────────────────────────────────────────────────
-
     def resolve_inheritance(self) -> None:
         """Recalcule crop_effective et is_inherited pour tous les chapitres.
 
-        Règles :
-        1. Chapitre avec crop_explicit → crop_effective = crop_explicit
-           mais taille remplacée par global_crop_size si définie.
-           is_inherited = False. Devient le nouveau last_explicit.
-        2. Chapitre sans crop_explicit + last_explicit existe →
-           crop_effective = last_explicit (taille globale appliquée si définie).
-           is_inherited = True.
-        3. Chapitre sans crop_explicit + aucun précédent →
-           crop_effective = None. is_inherited = False.
+        Règle 1 : crop_explicit défini  → effective = _apply_global_size(explicit)
+                                           is_inherited = False, devient last_explicit
+        Règle 2 : pas d'explicit + last_explicit → effective = last_explicit
+                                                   is_inherited = True
+        Règle 3 : pas d'explicit + rien → effective = None, is_inherited = False
         """
         log.debug("VideoFile.resolve_inheritance() — %d chapitres", len(self.chapters))
         last_explicit: Optional[CropZone] = None
 
         for ch in self.chapters:
             if ch.crop_explicit is not None:
-                # Appliquer la taille globale si définie, conserver la position
                 effective = self._apply_global_size(ch.crop_explicit)
                 ch.crop_effective = effective
-                ch.is_inherited   = False
-                last_explicit     = effective
-
+                ch.is_inherited = False
+                last_explicit = effective
             elif last_explicit is not None:
                 ch.crop_effective = last_explicit
-                ch.is_inherited   = True
-
+                ch.is_inherited = True
             else:
                 ch.crop_effective = None
-                ch.is_inherited   = False
+                ch.is_inherited = False
 
             ch.invalidate_display()
             log.debug(
                 "  ch[%d] explicit=%s effective=%s inherited=%s",
-                ch.index,
-                ch.crop_explicit,
-                ch.crop_effective,
-                ch.is_inherited,
+                ch.index, ch.crop_explicit, ch.crop_effective, ch.is_inherited,
             )
 
     def _apply_global_size(self, crop: CropZone) -> CropZone:
-        """Retourne crop avec la taille de global_crop_size si définie,
-        SAUF si le crop_explicit a déjà une taille propre (w > 0).
-        La taille globale ne sert que d'initialisation.
-        La position (pos_x, pos_y) du crop d'origine est toujours conservée.
+        """Retourne crop avec taille globale appliquée si le crop n'en a pas.
+
+        BUG-28 — Règles corrigées :
+        - crop.w > 0 et crop.h > 0  → taille propre conservée
+        - crop.w == 0 ou crop.h == 0 → global_crop_size.w/h utilisés
+        - pos_mode == "center" → pos_x/pos_y recalculés depuis video_w/video_h
+        - pos_mode != "center" → pos_x/pos_y conservés
+        - global_crop_size is None → retourne crop inchangé
         """
         if self.global_crop_size is None:
             return crop
-        # Si le crop a déjà une taille explicite, ne pas l'écraser
-        if crop.w > 0 and crop.h > 0:
+
+        final_w = crop.w if crop.w > 0 else self.global_crop_size.w
+        final_h = crop.h if crop.h > 0 else self.global_crop_size.h
+
+        if crop.pos_mode == "center":
+            final_x = (self.video_w - final_w) // 2 if self.video_w > 0 else crop.pos_x
+            final_y = (self.video_h - final_h) // 2 if self.video_h > 0 else crop.pos_y
+        else:
+            final_x = crop.pos_x
+            final_y = crop.pos_y
+
+        if (
+            final_w == crop.w
+            and final_h == crop.h
+            and final_x == crop.pos_x
+            and final_y == crop.pos_y
+        ):
             return crop
+
         return CropZone(
-            w=self.global_crop_size.w,
-            h=self.global_crop_size.h,
-            pos_x=crop.pos_x,
-            pos_y=crop.pos_y,
+            w=final_w,
+            h=final_h,
+            pos_x=final_x,
+            pos_y=final_y,
             pos_mode=crop.pos_mode,
             explicit=crop.explicit,
         )
 
     def invalidate_all_displays(self) -> None:
-        """Invalide tous les caches de rendu (appelé quand taille globale change)."""
         log.debug("VideoFile.invalidate_all_displays()")
         for ch in self.chapters:
             ch.invalidate_display()
 
-    # ── Construction nom de fichier ────────────────────────────────────────
-
     def build_filename(self) -> str:
-        """Reconstruit le long_name complet depuis les métadonnées.
-
-        Format : <id> - <studio> - <actors> - <title> - <styles> - <date>
-                 - <booleans> - <options> - CROP(WxH) - <chapitres><ext>
-
-        Seules les parties non vides/non nulles sont incluses.
-        """
         parts: list[str] = []
 
         if self.file_id:
@@ -173,32 +172,23 @@ class VideoFile:
         if self.date:
             parts.append(self.date)
 
-        # Booléens (POV, 3D, NOCUT…) — clés dont la valeur est True
         for key, val in self.booleans.items():
             if val:
                 parts.append(key)
 
-        # Options (ENCODE=hevc, RESIZE=1080p…)
         for key, val in self.options.items():
             if val:
                 parts.append(f"{key}={val}" if val is not True else key)
 
-        # Taille crop globale
         if self.global_crop_size is not None:
             parts.append(self.global_crop_size.to_filename_token())
 
-        # Chapitres
         for ch in self.chapters:
             parts.append(ch.to_filename_token())
 
-        stem = " - ".join(parts)
-        return stem + self.extension
+        return " - ".join(parts) + self.extension
 
     def build_short_filename(self) -> str:
-        """Nom court : tout avant CROP et chapitres (stocké sur disque).
-
-        C'est le nom physique réel — sans complement #toCut.txt.
-        """
         parts: list[str] = []
 
         if self.file_id:
@@ -222,16 +212,9 @@ class VideoFile:
             if val:
                 parts.append(f"{key}={val}" if val is not True else key)
 
-        stem = " - ".join(parts)
-        return stem + self.extension
-
-    # ── Navigation ────────────────────────────────────────────────────────
+        return " - ".join(parts) + self.extension
 
     def chapter_at_time(self, ts_sec: int) -> int:
-        """Retourne l'index du chapitre correspondant à ts_sec.
-
-        Le chapitre retourné est le dernier dont timestamp_sec <= ts_sec.
-        """
         best = 0
         for ci, ch in enumerate(self.chapters):
             if ch.timestamp_sec <= ts_sec:

@@ -216,13 +216,10 @@ class SessionController:
         threading.Thread(target=self._preload_thumbs, daemon=True).start()
         threading.Thread(target=self._load_frame, args=(0,), daemon=True).start()
     def _emit_session_files(self) -> None:
-        """Émet la liste des fichiers de la session avec le chemin complet."""
-        entries = [
-            (e.short_name, e.physical_path)
-            for e in self._session.entries
-        ]
+        """Émet les noms courts des fichiers de la session pour la combobox."""
+        names = [e.short_name for e in self._session.entries]
         current_idx = self._session.current_index
-        self._emit(EVT.EvtSessionFilesUpdated(names=entries,current=current_idx))
+        self._emit(EVT.EvtSessionFilesUpdated(names=names, current=current_idx))
         
     def _preload_thumbs(self) -> None:
         from video_processor.infra.frame_extractor import FrameExtractor
@@ -417,6 +414,13 @@ class SessionController:
             new_h  = max(10, min(new_h, vh))
             new_x  = max(0,  min(new_x, vw - new_w))
             new_y  = max(0,  min(new_y, vh - new_h))
+            # Propager la nouvelle taille au crop global
+            if cmd.w is not None or cmd.h is not None:
+                self._vf.global_crop_size = CropZone(
+                    w=new_w, h=new_h,
+                    pos_x=0, pos_y=0,
+                    pos_mode="topleft", explicit=True,
+                )
             ch.crop_explicit = CropZone(
                 w=new_w, h=new_h,
                 pos_x=new_x, pos_y=new_y,
